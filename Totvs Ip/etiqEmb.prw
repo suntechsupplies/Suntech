@@ -1,0 +1,379 @@
+#include 'protheus.ch'
+#include 'parmtype.ch'
+#include 'topconn.ch'
+#Include "RwMake.ch"
+#INCLUDE 'APVT100.CH'
+
+/*/{Protheus.doc} etiqEmb
+Fonte responsável pela impressão da Etiqueta de Embalagem tanto pelo menu quanto pelo ACD
+@author Victor Freidinger
+@since 03/09/2019
+@type function
+@see ACD170FIM_PE
+/*/
+
+
+#DEFINE VELOCIDADE_IMPRESSORA 4
+#DEFINE NLININI	 005
+#DEFINE NQUEBNOR 004
+
+user function etiqEmb(nOpcao)
+
+	local xBkpMV01 := MV_PAR01
+
+	private nRegs
+	private nQtdEtq
+	private cZPL
+	private cFila
+	private aTela
+	private nOpc
+	private lMenu := .F.
+
+	//private cOrdSep := '000035' -> Teste
+
+	if nOpcao == 1 // Se opção 1 é porque veio do ponto de entrada ACD170FIM_PE e já há a código da separação 
+		Processa({|| buscaFila() }, "Aguarde...", "Gravando Dados...",.F.)
+		Processa({|| montaEtiq() }, "Aguarde...", "Imprimindo...",.F.)
+	else
+		while ValidPerg()
+			cOrdSep := MV_PAR01
+			cFila := "000001"
+			lMenu := .T.
+			Processa({|| montaEtiq() }, "Aguarde...", "Imprimindo...",.F.)
+		enddo
+	endif
+
+	MV_PAR01 := xBkpMV01
+
+return
+
+/* Função responsável por escolher a impressora quando vier pelo ACD */
+static function buscaFila()
+
+	dbSelectArea("CB1")
+	dbSetOrder(2)
+	if dbSeek(xFilial("CB1")+__cUserId)
+		cFila:= CB1->CB1_ZZFILA
+
+		if Empty(cFila) .OR. ''
+			aTela := VtSave()
+			VTCLear()
+
+			@ 0,0 VTSAY "Escolha a Impressora"
+			@ 1,0 VTSay 'Selecione:'
+			nOpc:=VTaChoice(3,0,6,VTMaxCol(),{"Maquina 01","Maquina 02","Maquina 03"})
+
+			VtRestore(,,,,aTela)
+
+			If nOpc == 1
+				cFila:= "000001"
+			ElseIf nOpc == 2
+				cFila:= "000001"
+			ElseIf nOpc == 3
+				cFila:= "000001"
+			EndIf
+
+		endif
+	endif
+
+	dbSelectArea("CB9")
+	dbSeek(xFilial("CB9")+cOrdSep)
+	geraDadosNF(CB9->CB9_PEDIDO)
+
+return
+
+/* Função responsável por gravar dados nas tabelas SC5 e SF2 conforme a Geração da Nota pelo ACD */
+static function geraDadosNF(cPed)
+	local aAreaSC5	:= SC5->(getArea())
+	local aAreaSF2	:= SF2->(getArea())
+	local cAlias 	:= getNextAlias()
+	local nPLiqui 	:= 0
+	local nPBruto 	:= 0
+	local nVolume   := 0
+	local nRegSC5   := 0
+	local nRegSF2   := 0
+	local cEspecie	:= ""
+	local cPedido	:= ""
+	local cDoc		:= ""
+	local cSerie	:= ""
+
+	BeginSql Alias cAlias
+		SELECT F2.R_E_C_N_O_ AS REGSF2, C5.R_E_C_N_O_ AS REGSC5, D2_QTSEGUM, D2_QUANT, D2_COD, D2_PEDIDO, D2_DOC, D2_SERIE
+		FROM %TABLE:SD2% D2
+		INNER JOIN %TABLE:SF2% F2
+		ON %XFILIAL:SF2% = F2_FILIAL
+		AND F2_DOC = D2_DOC
+		AND F2_SERIE = D2_SERIE
+		AND F2_CLIENTE = D2_CLIENTE
+		AND F2_LOJA = D2_LOJA
+		AND F2.D_E_L_E_T_ = ' '
+		INNER JOIN %TABLE:SC5% C5
+		ON %XFILIAL:SC5% = C5_FILIAL
+		AND C5_NUM = D2_PEDIDO
+		AND C5.D_E_L_E_T_ = ' '
+		WHERE %XFILIAL:SD2% = D2_FILIAL
+		AND D2_PEDIDO = %EXP:cPed%
+		AND D2.D_E_L_E_T_ = ' '
+	EndSql
+	(cAlias)->(dbGoTop())
+	Do While !(cAlias)->(eof())
+
+		nPLiqui += (cAlias)->D2_QUANT * Posicione("SB1", 1, xFilial("SB1") + (cAlias)->D2_COD, "B1_PESO")
+		nPBruto += (cAlias)->D2_QUANT * Posicione("SB1", 1, xFilial("SB1") + (cAlias)->D2_COD, "B1_PESBRU")
+		nRegSC5 := (cAlias)->REGSC5
+		nRegSF2 := (cAlias)->REGSF2
+		cPedido := (cAlias)->D2_PEDIDO
+		cDoc	:= (cAlias)->D2_DOC
+		cSerie	:= (cAlias)->D2_SERIE
+
+		(cAlias)->(dbSkip())
+	endDo
+
+	getEspec(cDoc, cSerie, @cEspecie, @nVolume)
+
+	grvSC5(nPLiqui, nPBruto, nVolume, cEspecie, nRegSC5)
+	grvSF2(nPLiqui, nPBruto, nVolume, cEspecie, nRegSF2)
+
+	(cAlias)->(dbCloseArea())
+
+	restArea(aAreaSC5)
+	restArea(aAreaSF2)
+return
+
+static function grvSF2(nPLiqui, nPBruto, nVol, cEspec, nRegSF2)
+	SF2->(dbGoto(nRegSF2))
+	RecLock("SF2", .F.)
+	SF2->F2_PLIQUI	:= nPLiqui
+	SF2->F2_PBRUTO  := nPBruto
+	SF2->F2_VOLUME1 := nVol
+	SF2->F2_ESPECI1 := cEspec
+	SF2->(MsUnlock())
+return
+
+static function grvSC5(nPLiqui, nPBruto, nVol, cEspec, nRegSC5)
+	SC5->(dbGoto(nRegSC5))
+	RecLock("SC5", .F.)
+	SC5->C5_VOLUME1 := nVol
+	SC5->C5_ESPECI1 := cEspec
+	SC5->C5_PESOL   := nPLiqui
+	SC5->C5_PBRUTO  := nPBruto
+	SC5->(MsUnlock())
+return
+
+static function getEspec(cDoc, cSerie, cEspec, nVol)
+	local cAlias 	:= getNextAlias()
+
+	BeginSql Alias cAlias
+		SELECT CB3_DESCRI, count(CB6_VOLUME) CB6_VOLUME
+		FROM %TABLE:CB6% CB6
+		INNER JOIN %TABLE:CB3% CB3
+		ON %XFILIAL:CB3% = CB3_FILIAL
+		AND CB3_CODEMB = CB6_TIPVOL
+		AND CB3.D_E_L_E_T_ = ' '
+		WHERE %XFILIAL:CB6% = CB6_FILIAL
+		AND CB6_NOTA =  %exp:cDoc%
+		AND CB6_SERIE =  %exp:cSerie%
+		AND CB6.D_E_L_E_T_ = ' '
+		GROUP BY CB3_DESCRI
+	EndSql
+	(cAlias)->(dbGoTop())
+	if !(cAlias)->(eof())
+		cEspec 	:= "CAIXA" //(cAlias)->CB3_DESCRI
+		nVol 	:= (cAlias)->CB6_VOLUME
+	endIf
+
+	(cAlias)->(dbCloseArea())
+return
+
+/* Função responsável pela montagem da Etiqueta conforme quantidade de registros na tabela CB9 e ordem de separação */
+static function montaEtiq()
+
+	local cQuery  := ""
+	local cQuery2 := ""
+	local cAlias  := getNextAlias()
+	local nQtdCB9 := 0
+
+	nQtdEtq := 0
+
+	cQuery := " SELECT DISTINCT CB9_VOLUME AS VOLUME " + CRLF
+	cQuery += "   FROM " + retSqlName("CB9") + " CB9" + CRLF
+	cQuery += "  WHERE CB9_ORDSEP = '" + cOrdSep + "'" + CRLF
+	cQuery += "    AND " + retSqlDel("CB9") + CRLF
+	cQuery += "    AND " + retSqlFil("CB9") + CRLF
+
+	TcQuery cQuery New Alias (cAlias)
+
+	Count To nRegs
+
+	(cAlias)->(DbGoTop())
+
+	while (cAlias)->(!eof())
+		cQuery2 := " SELECT SUM(CB9_QTESEP) AS QUANT " + CRLF
+		cQuery2 += "   FROM " + retSqlName("CB9") + " CB9" + CRLF
+		cQuery2 += "  WHERE CB9_ORDSEP = '" + cOrdSep + "'" + CRLF
+		cQuery2 += "    AND CB9_VOLUME = '" + (cAlias)->VOLUME + "'" + CRLF
+		cQuery2 += "    AND " + retSqlDel("CB9") + CRLF
+		cQuery2 += "    AND " + retSqlFil("CB9") + CRLF
+
+		TCQUERY cQuery2 NEW ALIAS "TABCB9"
+
+		nQtdCB9 := TABCB9->QUANT
+
+		TABCB9->(dbCloseArea())
+
+		nQtdEtq := nQtdEtq + 1
+
+		imprEtiq(nQtdCB9, (cAlias)->VOLUME)
+
+		(cAlias)->(dbSkip())
+	enddo
+
+	(cAlias)->(dbCloseArea())
+
+return
+
+/* Função responsável pela geração da etiqueta de embalagem tanto pela ACD quanto pelo menu (verificar variável lMenu) */
+static function imprEtiq(nQtdCB9, cVolume)
+
+	local nQtdEtiq := 1
+	local nLinha   := NLININI
+	local nColuna  := 005
+
+	local aNota   := {}
+	local aNome   := {}
+	local cFila   := "000001"
+
+	dbselectArea("CB5")
+	if dbSeek(xFilial("CB5")+cFila)
+		ConOut("ETIQEMB ACHOU A FILA NO CB5 [ " + cFila + " ]")
+	else
+		ConOut("ETIQEMB NAO ACHOU A FILA NO CB5 [ " + cFila + " ]")
+	endif
+
+	If !CB5SetImp(cFila)
+		if !lMenu
+			VtAlert('Codigo do tipo de impressao invalido. A etiqueta não será impressa.')
+			Return .f.
+		else
+			MsgStop("Problemas no local de impressão!")
+			Return
+		endif
+
+	EndIF
+
+	if lMenu // Se é por menu utilizar a porta LPT1 configurada 
+		MSCBPRINTER("ZEBRA","LPT1",,,.f.,,,,,,)
+	endif
+
+	MSCBCHKSTATUS(.F.)
+
+	MSCBBEGIN(nQtdEtiq,VELOCIDADE_IMPRESSORA)
+
+	nLinha  := NLININI
+
+	aNota := buscaNota()
+
+	aNome := charToImp(aNota[1,3], 18)
+
+	MSCBSAY(nColuna+04,nLinha,"Nota Fiscal: " + aNota[1,1],"N","0","055",,,,,.T.) //Número da Nota
+	nLinha += 10
+
+	for nC := 1 to len(aNome)
+		if nC == 1
+			MSCBSAY(nColuna+04,nLinha,"Dest: " + AllTrim(aNome[nC]),"N","0","055",,,,,.T.) //Cliente
+		else
+			MSCBSAY(nColuna+04,nLinha, AllTrim(aNome[nC]),"N","0","055",,,,,.T.) //Cliente
+		endif
+		nLinha += 06
+	next nC
+
+	//MSCBSAY(nColuna+10,nLinha,"Dest: " + aNota[1,3],"N","0","055",,,,,.T.) //Cliente
+	nLinha += 03
+	MSCBSAY(nColuna+04,nLinha,"Qtd Peças: " + cValToChar(nQtdCB9),"N","0","035",,,,,.T.) //Qtd Peças
+	nLinha += 05
+	MSCBSAY(nColuna+04,nLinha,"Qtd Volume: " + cValToChar(nQtdEtq) + " / " + cValToChar(nRegs),"N","0","035",,,,,.T.) //Qtd Volumes
+	nLinha += 05
+	MSCBSAY(nColuna+04,nLinha,"Separador: " + aNota[1,4],"N","0","035",,,,,.T.) //Embalador
+	nLinha += 05
+	MSCBSAY(nColuna+04,nLinha,"Volume: " + cVolume,"N","0","045",,,,,.T.) //Qtd Peças
+	nLinha += 05
+	MSCBSAY(nColuna+70,nLinha,"SUNTECH" ,"N","0","025",,,,,.T.) //Suntech
+
+	MSCBInfoEti("etiqEmb"+cOrdSep,"100X100")
+	cZPL := MSCBEND()
+
+	//memoWrite("c:\temp\aaa"+cVolume+".txt",cZPL)
+
+	MSCBCLOSEPRINTER()
+
+return
+
+static function buscaNota()
+
+	local cQuery := ""
+	local cAlias := getNextAlias()
+	local aSF2   := {}
+
+	POSICIONE("CB7", 1, xFilial("CB7")+cOrdSep, "!eof()")
+
+	cQuery := " SELECT F2_DOC + '/' + F2_SERIE as NOTA " + CRLF
+	cQuery += "      , F2_CHVNFE " + CRLF
+	cQuery += "      , A1_NOME " + CRLF
+	cQuery += "   FROM " + retSqlName("SF2") + " SF2" + CRLF
+	cQuery += "  INNER JOIN " + retSqlName("SA1") + " SA1" + CRLF
+	cQuery += "     ON F2_CLIENTE = A1_COD AND F2_LOJA = A1_LOJA " + CRLF
+	cQuery += "  WHERE F2_DOC = '" + CB7->CB7_NOTA + "'" + CRLF
+	cQuery += "    AND F2_SERIE = '" + CB7->CB7_SERIE + "'" + CRLF
+	cQuery += "    AND " + retSqlDel("SF2") + CRLF
+	cQuery += "    AND " + retSqlFil("SF2") + CRLF
+
+	TcQuery cQuery New Alias (cAlias)
+
+	POSICIONE("CB1", 1, xFilial("CB1")+CB7->CB7_CODOPE, "!eof()")
+
+	aAdd(aSF2, {(cAlias)->NOTA, (cAlias)->F2_CHVNFE, (cAlias)->A1_NOME, CB1->CB1_NOME})
+
+	(cAlias)->(dbCloseArea())
+
+return aSF2
+
+static function charToImp(cString,nQtdChar)
+	local aRet 	:= {}
+	local nLine := 0
+	local nCount := MlCount( cString,nQtdChar )
+
+	if nCount == 0
+		aRet := {""}
+	else
+		For nLine := 1 To nCount
+			aAdd(aRet,MemoLine(cString,nQtdChar,nLine))
+		Next nLine
+	endif
+return aRet
+
+Static Function ValidPerg()
+
+	Local aRet		:= {}
+	Local aParamBox	:= {}
+	Local lRet 		:= .F.
+
+	aAdd(aParamBox,{1,"Número da Separação",space(getSX3Cache("CB7_ORDSEP","X3_TAMANHO")),"","","","",50,.T.}) //MV_PAR01
+
+	If ParamBox(aParamBox,"Etiqueta Embalagem",@aRet,,,,,,,"etiqEmb",.F.,.T.)
+		lRet := .T.
+	EndIf
+
+Return lRet
+
+/*
+user function xPTO6()
+
+rpcClearEnv()
+//RpcSetEnv("99","01")
+RPCSetEnv("01", "02", "admin", "agis9", "EST")
+Define MSDialog oMainWND from 0,0 to 400, 500 pixel
+@ 5,5 button "etiqEmb" of oMainWND pixel action U_etiqEmb()
+Activate MSDialog oMainWND
+
+return
+*/

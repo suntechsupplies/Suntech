@@ -1,0 +1,393 @@
+B1_LOTVEN Qtde Venda
+B1_EMIN Ponto Pedido
+B1_ESTNEG Segurança
+B1_LE Lote Econom.
+B1_LM Lote Mínimo
+B1_EMAX Estoq Máximo
+B2_QFIM Qtd. Fim Mês
+B2_QATU Saldo Atual
+B2_QEMP Empenho
+B2_RESERVA Qtd. Reserva
+B2_QPEDVEN Qtd. Ped. Vend
+B2_NAOCLAS Qtd. N. Endere
+B2_SALPEDI Qtd. Prevista
+B2_QTNP Qt. Ter. Ns. Pd
+B2_QNPT Qt. Ns. Pd. Ter
+B2_QTER Saldo Por. 3
+B2_QFIM2 Qt. Fim Mês 2a UM
+B2_QEMPSA Qtd. Emp. SA
+B2_QEMPPRE Empen. Previ
+B2_SALPPRE Qtd. Prev. OP
+B2_QACLASS Qtd. a Endere
+B2_QEMP2 Empenho 2a UM
+B2_QEMPN2 Qtd. Emp. NF 2a UM
+B2_RESERV2 Reserva 2a UM
+B2_QPEDVE2 Qt. Pd. Ve. 2UM
+B2_QEPRE2 Emp. Prev. 2UM
+B2_QFIMFF Qtd. Fim Mês
+B2_SALPED2 Qtd. Prev. 2UM
+B2_QEMPPRJ Qtd. Emp. Prj.
+B2_QEMPPR2 Qtd. Emp. Prj 2 UM
+B6_QUANT Quantidade
+B6_QTSEGUM Qtd. Seg. UM
+B6_QULIB Quant. Lib.
+B6_SALDO Saldo
+B7_QUANT Quantidade
+B7_QTSEGUM Qtd. 2a UM
+B8_QTDORI Qtd. Original
+B8_SALDO Saldo Lote
+B8_EMPENHO Emp. Do Lote
+B8_QEMPPRE Empen. Previ
+B8_QACLASS Qtd. Distrib
+B8_SALDO2 Sdo. Lote 2 UM
+B8_QTDORI2 Qtd. Orig. 2 UM
+B8_EMPENH2 Emp. Lote 2 UM
+B8_QEPRE2 Emp. Prev. 2 UM
+B8_QACLAS2 Qtd. Dist. 2 UM
+B9_QINI Qtd. Inic. Mês
+B9_QISEGUM Qt. Ini. 2a UM
+BC_QUANT Quantidade
+BC_QTSEGUM Qtd. Perd. 2a UM
+BC_QTDDEST Qtd. Destino
+BC_QTDDES2 Qtd. Dest. 2a UM
+BD_QUANT Quantidade
+BD_QT2UM Quant. 2a UM
+BD_QINI Qtd. Inicio
+BD_QINI2UM Qtd. Ini. 2a UM
+BD_QFIM Qtd. Final
+BD_QFIM2UM Qtd. Fim 2a UM
+BE_CAPACID Capacidade
+BF_QUANT Quantidade
+BF_EMPENHO Empenho
+BF_QEMPPRE Empen. Previ
+BF_QTSEGUM Qtd. 2a UM
+BF_EMPEN2 Empenho 2 UM
+BF_QEPRE2 Emp. Prev. 2 UM
+BH_QUANT Quantidade
+BJ_QINI Qtd. Inic. Mês
+BJ_QISEGUM Qt. Ini. 2a UM
+BK_QINI Qtd. Inic. Mês
+BK_QISEGUM Qt. Ini. 2a UM
+C0_QUANT Quantidade
+C0_QTDORIG Qtd. Original
+C0_QTDPED Qtd. Em. Ped.
+C0_QTDELIM Qt. Eliminada
+C1_QUANT Quantidade
+C1_QTSEGUM Qtd. 2a UM
+C1_QUJE Quant. Em Ped
+C1_QUJE2 Qtd. Seg. Ped
+C1_QTDORIG Qtd. Original
+C2_QUANT Quantidade
+C2_QUJE Qtd. Produzida
+C2_PERDA Perda
+C2_QTUPROG Qtde Ult. MRP
+C2_QTSEGUM Qtd. 2a UM
+C3_QUANT Quantidade
+C3_QUJE Qtd. Entregue
+C3_QTSEGUM Qtd. 2a UM
+C3_QTIMP Qtd. Imp.
+C4_QUANT Quantidade
+C6_QTDVEN Quantidade
+C6_QTDLIB Qtd. Liberada
+C6_QTDLIB2 Qtd. Lib. 2a UM
+C6_SLDALIB Sld. A Liber.
+C6_UNSVEN Qtd. Ven. 2a UM
+C6_QTDENT Qtd. Entregue
+C6_QTDENT2 Qtd. Ent. 2a UM
+C6_QTDRESE Qtd. Reserva
+C6_QTDEMP Qt. Empenhada
+C6_QTDEMP2 Qt. Emp. 2a UM
+C7_QUANT Quantidade
+C7_QTSEGUM Qtd. 2a UM
+C7_QUJE Qtd. Entregue
+C7_QTDACLA Qtd. A Classi.
+C7_QTDSOL Qtde. da SC
+C8_QUANT Quantidade
+C8_QTDCTR Qtd. p/ Ctr.
+C8_QTSEGUM Qtd. 2a UM
+C9_QTDLIB Qt. Liberada
+C9_QTDRESE Qtd. Reserva
+C9_QTDLIB2 Qt. Lib. 2a UM
+CC_QINI Qtd. Inicio
+CC_QINI2UM Qtd. Ini. 2a UM
+CC_QFIM Qtd. Final
+CC_QFIM2UM Qtd. Fin. 2a UM
+CE_QUANT Qtd. Entrega
+CK_QTDVEN Quantidade
+CL_QUANT Quantidade
+CL_QTDVEN Necessidade
+CP_QUANT Quantidade
+CP_QTSEGUM Qtd. 2a UM
+CP_QUJE Quant. Atend.
+CP_SALBLQ Saldo Bloq.
+CQ_QUANT Quantidade
+CQ_QTSEGUM Qtd. 2a UM
+CQ_QTDDISP Quant. Disp.
+CW_SALDO Saldo
+CW_LIMITE Limite
+CY_QUANT Quantidade
+CY_QTSEGUM Qtd. 2a UM
+CY_QUJE Qtd. Entregue
+CY_QTDACLA Qtd. A Classi.
+CY_QTDSOL Qtde. da SC
+D1_QUANT Quantidade
+D1_QTSEGUM Qtde. 2a UM
+D1_QTDEDEV Qtd. Devol.
+D1_QTDPEDI Qtde. Pedido
+D1_QTPCCEN Qt. Vinc. PCC.
+D1_QTDCONF Qtd Conferen
+D2_QUANT Quantidade
+D2_QTSEGUM Qtde. 2a UM
+D2_QTDEDEV Qtde. Devol.
+D2_QTDEFAT Quant. Fatur.
+D2_QTDAFAT Quant. a Fat
+D3_QUANT Quantidade
+D3_QTSEGUM Qtd. 2a UM
+D3_PERDA Perda
+D4_QSUSP Qtd. Suspensa
+D4_QTDEORI Qtd. Empenho
+D4_QUANT Sal. Empenho
+D4_QTSEGUM Sld. Emp. 2a UM
+D5_QUANT Quantidade
+D5_QTSEGUM Qtd. 2a UM
+D6_QUANT Quantidade
+D7_QTDE Quantidade
+D7_SALDO Saldo
+D7_QTSEGUM Qtd. 2a UM
+D7_SALDO2 Saldo 2a UM
+D8_QUANT Quantidade
+D8_QT2UM Quant. 2a UM
+D8_QTDDEV Quant. Dev.
+D8_QFIMDEV Qtd. Devolucao
+D8_SD1DEV Qtde. NF Orig.
+DA_QTDORI Qtd. Original
+DA_SALDO Saldo
+DA_EMPENHO Empenho
+DA_QTSEGUM Saldo 2a UM
+DA_QTDORI2 Qtd. Ori 2a UM
+DA_EMP2 Empenho 2a UM
+DB_QUANT Qtd. Distriuida
+DB_EMPENHO Empenho
+DB_QTSEGUM Qtd. 2a UM
+DB_EMP2 Empenho 2a UM
+DB_QTORI Qtde Original
+DC_QUANT Quantidade
+DC_QTDORIG Qtd. Original
+DC_QTSEGUM Qtd. 2a UM
+DD_QUANT Quantidade
+DD_SALDO Saldo
+DD_QTDORIG Qtd. Orig.
+DD_QTSEGUM Qtd. 2a UM
+DD_SALDO2 Saldo 2a UM
+DF_QTDSUG Qtd. Sugerida
+DF_QTDINF Qtd. Infor.
+DF_QTDEST Disponivel
+DF_QTDPC Pendente
+DF_D01 D. Mês 01
+DF_QTDSUGM Media Calc.
+G1_QUANT Quantidade
+G4_QUANT Quantidade
+G7_QUANT Quantidade
+GG_QUANT Quantidade
+H6_QTDPROD Qtd. Prod.
+H6_QTDPERD Qtd. Perda
+H6_PERDANT Perda Anter.
+H6_QTDPRO2 Qt. Prod. 2 UM
+H8_QUANT Quantidade
+HC_QUANT Quantidade
+HD_QUANT Quantidade
+ADB_QUANT Quantidade
+ADB_UNSVEN Qtd. Ctr. 2a UM
+ADB_QTDENT Qtd. Entregue
+ADB_QTDEMP Qt. Empenhada
+W1_QTDE Quantidade
+W1_SALDO_Q Saldo Quanitdade
+W1_QTSEGUM Quantidade 2 U.M.
+W3_QTDE_LI Quantidade LI
+W3_QTD_EMB Quant. Embarcada
+W3_QTDE Quantidade
+W3_SALDO_Q Saldo Quantidade
+W3_SEM_PED Quant. Sem Pedido
+W5_QTDE Quantidade
+W5_SALDO_Q Saldo Quantidade
+W5_QT_AC Quant. Baixada AC
+W5_QT_AC2 Quant. C. Baix. AC
+W7_QTDE Quantidade
+W7_SALDO_Q Saldo Quantidade
+W8_QTDE Quantidade
+W8_QT_AC Quant. Baixada AC
+W8_QT_AC2 Qtd. C. Baixada AC
+W8_SALISEN Saldo Isenção
+W8_QTDE_UM Quantidade Unitária
+WE_QTDE Quantidade
+WE_SALDO_Q Saldo Quantidade
+WJ_QTD_01 Quantidade 01 a 12
+WK_QT_PO01 Quant. PO 01 a 12
+WN_QUANT Quantidade
+WN_QTSEGUM Quant. 2 U.M. 
+WP_QT_EST Quant. Estatística
+WS_QTDE Quantidade
+WV_QTDE Quantidade
+EI2_QUANT Quantidade
+EI5_QTDE Quantidade
+EI5_SALDO Saldo Quantidade
+EIJ_QT_EST Quant. Estatística
+EIJ_QTUPIS Qtd. Estatística PIS
+EIJ_QTUCOF Qtd. Estatística COF
+EIJ_QTDCER Qtd. Do Item da DI
+EIS_QTDE Quantidade
+EIS_QT_AC Quant. Baixada AC
+EE8_SLDINI Saldo Inicial Item
+EE8_QE Qtd Item Embalagem
+EE8_SLDATU Saldo Atual Item
+EE8_QTDFIX Quantidade Fixada
+EE8_QTDLOT Quantidade Lote
+EE9_SLDINI Quant. Embarcada
+EE9_QE Qtd Item Embalagem
+EE9_QT_AC Qtd. Baixada AC
+EE9_SALISE Saldo Isenção
+EES_QTDE Quantidade
+EES_QTDDEV Quant. Devolvida
+EEW_QTDE Quantidade
+EXI_QTDE Quantidade Lote
+EXR_SLDINI Quantidade
+EXR_SALDO Saldo Quantidade
+EXR_QE Qtd. Na Embalagem
+EXS_QTD Quantidade
+EXS_QTDVNC Quant. A Vincular
+EXS_QTDEMB Quant. A Embarcar
+EXS_QTVING Qtd a Vinc Negativo
+EXS_QTEMNG Qtd a Emb Negativo
+EXS_QVFINA Qtd a Vinc Finalizada
+EXS_QEFINA Qtd a Emb Finalizada
+EXT_QTD Quantidade
+EXU_QTD Quantidade
+EXV_QTD Quantidade
+EY5_SLDINI Quant. Embarcada
+EY5_SLDATU Saldo Atual
+EY7_SLDINI Quant. Embarcada
+EY8_SLDINI Qtd a ser Baixada
+EY8_SLDATU Saldo Atual
+EYU_QTD Qtd Prod Intermed.
+EYU_QTDPRO Qtd Prod Final
+EYY_QUANT Quant. Exportada
+ED1_QTD Quantidade
+ED1_QTDNCM Qtd na UM da NCM
+ED1_QTDORI Quant. Original
+ED2_QTDORI Quant. Original
+ED2_QTD Quantidade
+ED2_QTDCAL Quant. Calculada
+ED2_QTDNCM Qtd na UM da NCM
+ED3_QTD Quantidade
+ED3_SALDO Saldo Quantidade
+ED3_QTDNCM Qtd na UM da NCM
+ED3_SALNCM Saldo na UM da NCM
+ED4_QTD Quantidade
+ED4_QTDCAL Quant. Calculada
+ED4_QT_LI Saldo Qtd da LI
+ED4_QT_DI Saldo Qtd da DI
+ED4_QTDNCM Qtd na UM da NCM
+ED8_QTD Quantidade
+ED8_QTDNCM Qtd na UM da NCM
+ED8_QT_AC Qtd de Compra AC      
+ED8_SALISE Saldo Isenção
+ED8_QT_AC2 Qtd UM da NCM AC
+ED9_QTD Quantidade   
+ED9_QT_AC Qtd Baixada no AC
+EDA_QTD Quantidade
+EDA_QTDEST Quant. na Estrutura
+EDC_QTD Quant. Selecionada
+EDC_QTDEST Quant. Na Estrutura  
+EDC_QTDPRO Quant. Produto 
+EDD_QTD Quantidade
+EDD_QTD_OR Quant. Original
+EDD_QTD_EX Quant. Exportação
+EDE_QTD Quantidade
+EDG_QTD Quantidade
+D0O_QUANT X
+D0P_QTDDI2 X
+D0P_QTDDIS X
+D0Q_QTDUNI X
+D0Q_QUANT X
+D0S_QUANT X
+D0V_QTDBLQ X
+D0V_QTDORI X
+D12_QTDLI2 X
+D12_QTDLID X
+D12_QTDMO2 X
+D12_QTDMOV X
+D12_QTDOR2 X
+D12_QTDORI X
+D14_QTDBL2 X
+D14_QTDBLQ X
+D14_QTDEM2 X
+D14_QTDEMP X
+D14_QTDEP2 X
+D14_QTDEPR X
+D14_QTDES2 X
+D14_QTDEST X
+D14_QTDPE2 X
+D14_QTDPEM X
+D14_QTDSP2 X
+D14_QTDSPR X
+D0M_QTDDE2 X
+D0M_QTDDEM X
+D0M_QTDDI2 X
+D0M_QTDDIS X
+DCF_QTDORI X
+DCJ_PESO X
+DCR_QTSEUM X
+DCR_QUANT X
+DCS_QTEMBA X
+DCS_QTORIG X
+DCS_QTSEPA X
+DCT_QTEMBA X
+DCT_QTLIBE X
+DCT_QTORIG X
+DCT_QTSEPA X
+DCV_QUANT X
+DCY_QTCONF X
+DCY_QTORIG X
+D0K_QUANT X
+D0G_QTDORI X
+D0G_QTORI2 X
+D0G_QTSEUM X
+D0F_QTDDI2 X
+D0F_QTDDIS X
+D0E_QTDDIS X
+D0E_QTDORI X
+D0E_QTDSEP X
+D0D_QTDDIS X
+D0D_QTDORI X
+D0D_QTDSEP X
+D09_QTDADI X
+D09_QTDDI2 X
+D09_QTDDIS X
+D09_QTQAD2 X
+D08_QTDDI2 X
+D08_QTDDIS X
+D08_QTDEN2 X
+D08_QTDEND X
+D08_QTDVE2 X
+D08_QTDVEN X
+D08_QTORID X
+D07_QTDDI2 X
+D07_QTDDIS X
+D07_QTDEN2 X
+D07_QTDENT X
+D07_QTORID X
+D07_QTORIE X
+D04_QTCONF X
+D02_QTCONF X
+D02_QTORIG X
+D02_QTSEPA X
+D01_QTCONF X
+D01_QTORIG X
+D01_QTSEPA X
+DC1_ALTMAX X
+DC1_CAPMAX X
+DC1_QTOCUP X
+DC1_QUANT X
+DCZ_QTCONF X
+DCF_QUANT X
+DCF_QTSEUM X

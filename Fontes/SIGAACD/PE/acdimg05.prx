@@ -1,0 +1,179 @@
+/*
+ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+±±ÉÍÍÍÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍ»±±
+±±ºPrograma  ³IMG05     ºAutor  ³Sandro Valex        º Data ³  19/06/01   º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºDesc.     ³Ponto de entrada referente a imagem de identificacao do     º±±
+±±º          ³volume temporario                                           º±±
+±±ÈÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼±±
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+ßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßß
+*/
+User Function IMG05()
+
+Local __cVolume 	:= paramixb[1]
+Local cPedido 		:= paramixb[2]
+Local cNota   		:= IF(len(paramixb)>=3,paramixb[3],nil)
+Local cSerie  		:= IF(len(paramixb)>=4,paramixb[4],nil)
+Local cID     		:= ""
+Local _lPrimeiro 	:= .T.
+Local sConteudo
+
+If Upper(Alltrim(FunName())) == "ACDV177"
+	If Type("_lPassou") == "U"
+		Public _lPassou := .T.
+	Else
+		_lPrimeiro := .F.
+	Endif
+Endif
+
+If _lPrimeiro
+	
+	cID := CBGrvEti('05',{__cVolume,cPedido,cNota,cSerie})
+	
+	MSCBBEGIN(1,3)
+	MSCBBOX(01,02,34,76,1)
+	MSCBLineV(30,30,76,1)
+	MSCBLineV(23,02,76,1)
+	MSCBLineV(15,02,76,1)
+	MSCBLineH(23,30,34,1)
+	MSCBSAY(32,33,"VOLUME","R","2","01,01")
+	MSCBSAY(29,33,"CODIGO","R","2","01,01")
+	MSCBSAY(26,33, __cVolume, "R", "2", "01,01")
+	If cNota==NIL
+		MSCBSAY(22,05,"Pedido","R","2","01,01")
+		MSCBSAY(19,05,cPedido,"R", "2", "01,01")
+	Else
+		MSCBSAY(22,05,"Nota","R","2","01,01")
+		MSCBSAY(19,05,cNota+ ' '+cSerie,"R", "2", "01,01")
+	EndIf
+	MSCBSAYBAR(12,22,cId,"R","MB07",8.36,.F.,.T.,.F.,,2,2,.F.,.F.,"1",.T.)
+	MSCBInfoEti("Volume Temp.","30X100")
+	sConteudo:=MSCBEND()
+Endif
+    
+cVolume := Paramixb[1]
+
+Return _lPrimeiro
+
+/*
+ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+±±ÉÍÍÍÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍ»±±
+±±ºPrograma  ³IMG05OFI  ºAutor  ³Sandro Valex        º Data ³  19/06/01   º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºDesc.     ³Ponto de entrada referente a imagem de identificacao do     º±±
+±±º          ³volume permanente."Oficial"                                 º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºUso       ³ AP5                                                        º±±
+±±ÈÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼±±
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+ßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßß
+*/
+
+// LOCALIZA CÓDIGO DO CLIENTE
+
+Static Function VldPED(cCodped)
+Local lResp:=.T.
+
+//Abre a tabela
+DbSelectArea("SC5")
+//Ordena
+DbSetOrder(1)
+//pesquisa .. se encontrar
+IF DbSeek(xFilial("SC5")+cCodPed ) == .T.
+	lResp:= SC5->C5_CLIENTE
+Endif
+//fechando
+dbCloseArea()
+Return lResp
+
+
+// ***********************************************************
+
+// LOCALIZA CÓDIGO DA TRANSPORTADORA
+Static Function Vldtransp(cCodped)
+Local lResp:=.T.
+
+//Abre a tabela
+DbSelectArea("SC5")
+//Ordena
+DbSetOrder(1)
+//pesquisa .. se encontrar
+IF DbSeek(xFilial("SC5")+cCodPed ) == .T.
+	lResp:= SC5->C5_transp
+Endif
+//fechando
+dbCloseArea()
+Return lResp
+
+// ***********************************************************
+
+
+
+
+
+User Function Img05OFI // imagem de etiqueta de volume permanente (OFICIAL)
+Local cId     := CBGrvEti('05',{CB6->CB6_VOLUME,CB6->CB6_PEDIDO})
+Local nTotEti := paramixb[1]
+Local nAtu    := paramixb[2]
+Local lResp   := {}
+Local lResp1   := {}
+Local ccliente := VldPED(CB6->CB6_PEDIDO)
+Local cTransp  := Vldtransp(CB6->CB6_PEDIDO)
+
+
+MSCBBEGIN(1,3)
+
+DbSelectArea("SA1")
+DbSetOrder(1)
+IF DbSeek(xFilial("SA1")+ccliente ) == .T.
+	Aadd (lResp,{ SA1->A1_NOME, SA1->A1_END, SA1->A1_BAIRRO, SA1->A1_MUN, SA1->A1_EST, SA1->A1_CEP, SA1->A1_COMPLEM})
+Endif
+
+MSCBSAY(05,03,"DESTINATARIO","N","3","01,01")
+MSCBSAY(05,06,lResp[1][1], "N", "3", "01,01")
+MSCBSAY(05,09,Alltrim(lResp[1][2]) + " - " + Alltrim(lResp[1][3]) +If(!Empty(lResp[1][7])," - "+Alltrim(lResp[1][7])," "), "N", "2", "01,01")
+MSCBSAY(05,12,Alltrim(lResp[1][4]) +" / "+ lResp[1][5], "N", "2", "01,01")
+MSCBSAY(05,15,Substr(lResp[1][6],1,5)+ " - " + Substr(lResp[1][6],6,3), "N", "2", "01,01")
+MSCBLineH(01,18,100,1)
+
+DbSelectArea("SM0")
+DbSetOrder(1)
+IF DbSeek(xFilial("SM0") ) == .T.
+	Aadd (lResp1,{ SM0->M0_NOMECOM, SM0->M0_ENDENT, SM0->M0_BAIRENT, SM0->M0_CIDENT, SM0->M0_ESTENT, SM0->M0_CEPENT})
+Endif
+
+MSCBSAY(05,19,"REMETENTE","N","3","01,01")
+MSCBSAY(05,22,"IBRAMED - INDUSTRIA BRAS. EQUIP. MEDICOS", "N", "3", "01,01")
+MSCBSAY(05,25,"AV. DR. CARLOS BURGOS, 2800 - JD ITALIA", "N", "2", "01,01")
+MSCBSAY(05,28,"AMPARO / SP", "N", "2", "01,01")
+MSCBSAY(05,31,"13901 - 080", "N", "2", "01,01")
+MSCBSAY(05,22,ALLTRIM(SM0->M0_NOMECOM), "N", "3", "01,01")
+MSCBSAY(05,25,ALLTRIM(SM0->M0_ENDENT) + " - " + ALLTRIM(SM0->M0_BAIRENT), "N", "2", "01,01")
+MSCBSAY(05,28,ALLTRIM(SM0->M0_CIDENT) + " / " + ALLTRIM(SM0->M0_ESTENT), "N", "2", "01,01")
+MSCBSAY(05,31,ALLTRIM(SM0->M0_CEPENT), "N", "2", "01,01")
+MSCBLineH(01,34,100,1)
+
+DbSelectArea("SA4")
+DbSetOrder(1)
+IF DbSeek(xFilial("SA4")+ctransp ) == .T.
+	lResp :=  SA4->A4_NOME
+Endif
+
+MSCBSAY(05,36,"TRANSPORTADORA","N","3","01,01")
+MSCBSAY(05,39,lResp, "N", "3", "01,01")
+MSCBSAYBAR(05,42,ctransp,"N","MB07",8.36,.F.,.T.,.F.,,2,2,.F.,.F.,"1",.T.)
+MSCBLineH(01,55,70,1)
+MSCBLineV(70,34,76,1)
+MSCBSAY(74,37,"PEDIDO","N","2","01,01")
+MSCBSAY(74,54,"VOLUME","N","2","01,01")
+MSCBSAYBAR(74,39,AllTrim(CB6->CB6_PEDIDO),"N","MB07",8.36,.F.,.T.,.F.,,2,2,.F.,.F.,"1",.T.)
+MSCBSAYBAR(74,56,AllTrim(cId),"N","MB07",8.36,.F.,.T.,.F.,,2,2,.F.,.F.,"1",.T.)
+MSCBSAY(10,60,StrZero(nAtu,2)+"/"+StrZero(nTotEti,2), "N", "2", "06,03")
+
+MSCBInfoEti("Volume Oficial","30X100")
+MSCBEND()
+
+Return .F.

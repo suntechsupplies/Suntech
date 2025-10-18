@@ -1,0 +1,112 @@
+SB1 //Produto
+SB2 //Saldos Físicos e Financeiros
+SB4 //Referência de Produto
+SB5 //Dados Adicionais do Produto
+SB6 //Saldo em Poder de Terceiros
+SB7 //Lançamento de Inventário
+SB8 //Saldos por Lote
+SB9 //Saldos Iniciais
+SBC //Perda por OP
+SBD //Saldo por Lote Custo FIFO
+SBE //Endereços
+SBF //Saldos por Endereço
+SBH //Itens de Sugestão de Orçamento
+SBI //Produtos x Preços
+SBJ //Saldos Iniciais por Lote
+SBK //Saldos Iniciais por Endereço
+SC0 //Reservas para Faturamento
+SC1 //Solicitações de Compras
+SC2 //Ordens de Produção
+SC3 //Contrato de Parceria
+SC4 //Previsão de Vendas
+SC6 //Itens do Pedido de Venda
+SC7 //Pedidos de Compra
+SC8 //Cotações
+SC9 //Pedidos Liberados
+SCC //Saldos Iniciais FIFO
+SCE //Encerramento de Cotações
+SCK //Itens de Orçamento
+SCL //Itens do Orçamento Sugestão
+SCP //Solicitações ao Armazém
+SCQ //Pré-Requisições
+SCW //Saldo de Pré-Requisição
+SCY //Histórico de Pedidos de Compra
+SD1 //Itens das NF de Entrada
+SD2 //Itens das NF de Saída
+SD3 //Movimentações Internas
+SD4 //Requisições Empenhadas
+SD5 //Requisições por Lote
+SD6 //Itens de Contrato
+SD7 //Movimentações de CQ
+SD8 //Movimentações de Lote Custo FIFO
+SDA //Saldos a Distribuir
+SDB //Movimentações de Distribuição
+SDC //Composição do Empenho
+SDD //Bloqueio de Lotes
+SDE //Rateios da Nota Fiscal
+SDF //Itens Sugestão de Compras
+SG1 //Estruturas
+SG4 //Composição Seletiva do Produto
+SG7 //Restrições Secundárias
+SGA //Grupo de Opcionais
+SGG //Pré-Estrutura
+SH6 //Movimentação de Produção
+SH8 //Operações Alocadas
+SHC //Plano Mestre de Produção
+SHD //Operações Alocadas Sacramentadas
+ADB //Itens do Contrato de Parceria
+AIB //Itens da Tabela de Preço Compras
+DA1 //Itens da Tabela de Preço
+SW1 //Itens da Solicitação de Importação
+SW2 //Capa do PO – Purchase Order
+SW3 //Itens do PO – Purchase Order
+SW4 //Capa da PLI – Pedido da Licença de Importação
+SW5 //Itens da PLI – Pedido da Licença de Importação
+SW6 //Capa da DI – Declaração de Importação
+SW7 //Itens da DI – Declaração de Importação
+SW8 //Itens da Invoice
+SW9 //Capa da Invoice
+SWA //Capa do Câmbio
+SWE //Itens da Guia de Importações Especia
+SWJ //Histórico de Itens
+SWK //Histórico Geral
+SWN //Itens da Nota Fiscal de Importação
+SWP //Capa da LI – Licença de Importação
+SWS //Itens da Cotação
+SWT //Detalhamento da Cotação
+SWV //Lotes do Processo de Importação
+EI2 //Detalhe do Custo Realizado
+EI4 //Capa Pedidos Cancelados
+EI5 //Itens dos Pedidos Cancelados
+EIJ //Adições da DI – Declaração de Importa
+EIS //Licenças de Importação Canceladas 
+EE8 //Itens do Pedido de Exportação
+EE9 //Itens do Embarque
+EEM //Controle de Notas Fiscais
+EES //Notas Fiscais por Item
+EEW //Produtos na Embalagem
+EX5 //Produtos x Países
+EX6 //Produtos x Países x Clientes
+EXI //Lotes
+EXR //Detalhes da Invoice
+EXS //Itens da Carta de Crédito
+EXT //Controle Restaurar Saldo da Carta de Créd
+EXU //Capa das Amostras
+EXV //Itens das Amostras
+EY5 //Produtos Estocados em Consignação
+EY7 //Remessas Vinculadas
+EY8 //Baixas das Remessas
+EYU //Dados Fabricante Item de Exportação
+EYY //Notas Fiscais de Remessa
+ED1 //Produtos a Exportar
+ED2 //Itens a Importar
+ED3 //Saldos dos Produtos a Exportar
+ED4 //Saldos dos Itens a Importar
+ED8 //Manutenção da DI Externa
+ED9 //Manutenção do RE Externo
+EDA //Resumo das Estrutura
+EDC //Estrutura do Produto
+EDD //Relação Exportação para Importação
+EDE //Arquivo de LOG da Anterioridade
+EDG //Insumos sem Cobertura Cambial
+  

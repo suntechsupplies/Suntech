@@ -1,0 +1,18 @@
+Dnl_Util    - Aid Center - Menu com todas as demais utilidades.
+DnlRdErrLg  - Leitura de arquivo error.log.
+DnlSigErros - Simulação de error.log sem inicialização de ambiente.
+DnlEnvSgEr  - Simulação de error.log com inicialização de ambiente.
+DnlWMsExAu  - Popular base de dados, teste de performance.
+DnlCrFlMVC  - Criar fonte AdvPl/MVC.
+DnlTstCmpnt - Exemplos práticos e executáveis de componentes visuais.
+DnlPEFont   - Lista os pontos de entrada presentes em um fonte AdvPl.
+DnlRdEnrmnt - Lista diversas opções possíveis para a análise do ambiente Protheus.
+DnlExcAvpl  - Macro substituição de comandos AdvPl.
+DnlSgFzQry  - Permite efetuar consultas SQL no banco de dados.
+DnlSgOpnDb  - Permite abrir e consultar os arquivos do tipo xBase.
+DnlSndEMal  - Permite testar as configurações de envio de e-mail em dois métodos presentes da Framework.
+DnlNvBrwsr  - Browser simples de internet feito em Advpl com TWebEngine.
+DnlRESTTst  - Permite efetuar o teste de serviços REST, consumindo a API informada.
+U_Dnl_XVld  - Essa é uma função reservada para criar validações de acesso a ferramenta, quem deve implementar ela é o desenvolvedor/administrador do sistema.
+
+Autor: Daniel Mendes de Melo Sousa

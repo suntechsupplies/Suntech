@@ -1,0 +1,47 @@
+#include 'protheus.ch'
+#include 'parmtype.ch'
+#include 'topconn.ch'
+
+/*/{Protheus.doc} A010TOK
+Ponto de Entrada na confirmação do cadastro/alteração do Produto (MATA010)
+@author Victor Freidinger
+@since 03/09/2019
+@type function
+/*/
+
+user function A010TOK()
+
+	local lRet := .T.
+
+	if INCLUI
+		buscaZZ2(M->B1_COD)		
+	endif
+
+return lRet
+
+/* Função para inserir novo registro na tabela ZZ2 com o último código de barras +1 e o código do produto incluído */
+static function buscaZZ2(cCodPro)
+
+	local cCodBarZZ2 := ""
+	local cQuery     := ""
+	local lRet       := .T.
+
+	cQuery := " SELECT MAX(ZZ2_CODBAR) AS maiorCodBar " + CRLF
+	cQuery += "   FROM " + retSqlName("ZZ2") + " ZZ2" + CRLF
+	cQuery += "  WHERE " + retSqlDel("ZZ2") + CRLF
+	cQuery += "    AND " + retSqlFil("ZZ2") + CRLF
+
+	TCQUERY cQuery NEW ALIAS "TABZZ2"
+
+	dbSelectArea("ZZ2")
+
+	cCodBarZZ2 := Soma1(TABZZ2->maiorCodBar)
+	Reclock("ZZ2", .T.)
+	ZZ2_CODBAR := cCodBarZZ2
+	ZZ2_PRODUT := cCodPro
+	ZZ2_QUANT  := 1
+	MsUnlock()
+
+	TABZZ2->(DbCloseArea())
+
+return

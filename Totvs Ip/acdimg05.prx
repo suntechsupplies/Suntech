@@ -1,0 +1,18 @@
+#Include 'Protheus.ch'
+
+ /*/{Protheus.doc} IMG05
+Impressão de etiquetas de identificação do volume temporário.
+
+@author    Lucas Assis Mendes
+@since    31/10/2013
+@return    Nil
+/*/
+User Function IMG05()
+	
+	//Local lRet := .T.
+	
+	//lRet := U_ImpEtqId(PARAMIXB)
+	
+	cVolume := Paramixb[1]
+	
+Return 

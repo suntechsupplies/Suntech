@@ -1,0 +1,20 @@
+{
+    "totvsLanguageServer.welcomePage": false,
+    "totvsLanguageServer.askCompileResult": true
+}
+{
+    "editor.fontFamily": "Fira Code",
+    "editor.fontSize": 14,
+    "editor.fontLigatures": true
+
+}
+{
+    "key": "shift+alt+right",
+    "command": "bracket-pair-colorizer.expandBracketSelection",
+    "when": "editorTextFocus"
+},
+{
+    "key": "shift+alt+left",
+    "command": "bracket-pair-colorizer.undoBracketSelection",
+    "when": "editorTextFocus"
+}

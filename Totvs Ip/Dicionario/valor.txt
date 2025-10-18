@@ -1,0 +1,161 @@
+B1_PRV1 Preço Venda
+B1_CUSTD Custo Stand.
+B1_UPRC Ult. Preço
+B1_UVLRC Ult Vlr Comp
+B2_VFIM1 Vlr. Final
+B2_VATU1 Sld. Atu.
+B2_CM1 C. Unitário
+B2_CMFF1 C. Unit. FIFO 1
+B2_VFIMFF1 Vl. Fin. FIFO 1
+B2_CMRP1 C. Unit. Reposição 1
+B2_VRFP1 Vlr. Final Reposição1
+B2_CMFIM1 C. Unit. 1a M
+B4_PRV1 Preço Venda 1
+B4_PRV2 Preço Venda 2
+B4_PRV3 Preço Venda 3
+B4_PRV4 Preço Venda 4
+B4_PRV5 Preço Venda 5
+B4_PRV6 Preço Venda 6
+B4_PRV7 Preço Venda 7
+B5_PRV2 Preço Venda 2
+B5_PRV3 Preço Venda 3
+B5_PRV4 Preço Venda 4
+B5_PRV5 Preço Venda 5
+B5_PRV6 Preço Venda 6
+B5_PRV7 Preço Venda 7
+B6_PRUNIT Preço Unit.
+B6_CUSTO1 Custo Prod.
+B6_CUSFF1 Custo FIFO 1
+B6_CUSRP1 Custo Reposição
+B8_PRCLOT Preço Lote
+B9_VINI1 Sld. Ini. Mês
+B9_VINIFF1 Sld. Ini. FIF1
+B9_CUSTD Custo Stand.
+B9_CM1 C. Unit. 1a M
+B9_CMRP1 C. Repos. Produto
+B9_VINIRP1 Vlr. Inic. Reposição
+BD_CUSINI1 Cus. Ini. 1a Moeda
+BD_CUSFIM1 Cus. Fim 1a Moeda
+BI_PRV Preço Venda
+C1_VUNIT Vlr. Unitário
+C1_PRECO Prc. Unitário
+C2_VATU1 Vlr. Atual $
+C2_VINI1 Vlr. Inicial
+C2_VFIM1 Vlr. Final
+C2_APRATU1 Vlr. Apropri.
+C2_APRINI1 Vlr. Inic. Apr.
+C2_APRFIM1 Vlr. Fim Apr.
+C2_VINIFF1 Vlr. Inicial
+C2_VFIMFF1 Vlr. Final
+C2_APINFF1 Vlr. Inic. Apr.
+C2_APFIFF1 Vlr. Fim Apr.
+C2_VFIMRP1 Vlr. Fin. Reposição
+C2_VINIRP1 Vlr. Inic. Reposição
+C2_APRIRP1 Repos. Inic. Apropr.
+C2_APRFRP1 Repos. Fin. Apropr.
+C3_PRECO Prc. Unitário
+C4_VALOR Valor
+C6_PRCVEN Prc. Unitário
+C6_VALDESC Vlr. Desconto
+C6_PRUNIT Prc. Lista
+C7_PRECO Prc. Unitário
+C7_VLDESC Vl. Desconto
+C8_PRECO Preco Unitar
+C8_AVISTA Prc. A Vista
+C8_VLDESC Vl. Desconto
+C9_PRCVEN Prc. Venda
+CC_VINIFF1 Cus. Ini. 1a Moeda
+CC_VFIMFF1 Cus. Fin. 1a Moeda
+CK_PRCVEN Prc. Unitário
+CK_VALDESC Vlr. Desconto
+CK_PRUNIT Prc. Lista
+CY_PRECO Prc. Unitário
+CY_VLDESC Vl. Desconto
+D1_VUNIT Vlr. Unitário
+D1_CUSTO Custo Moeda 1
+D1_VALDEV Valor Devolvido
+D1_VALDESC Desconto
+D1_CUSFF1 Custo FIFO 1
+D1_CUSORI Custo Orig 1
+D1_PRUNDA Vlr. Unit. DA
+D1_CUSRP1 Custo Reposição 1
+D2_PRCVEN Vlr. Unitário
+D2_CUSTO1 Custo Moeda 1
+D2_PRUNIT Prc. Tabela
+D2_DESCON Desconto
+D2_VALDEV Valor Devol.
+D2_VALACRS Vlr. Acresc.
+D2_CUSFF1 Custo FIFO 1
+D2_VARPRUN Var. Prc. Unit.
+D2_CUSRP1 Custo Reposição 1
+D2_PRUNDA Vlr. Unit. DA
+D3_CUSTO1 Custo Moeda 1
+D3_CUSFF1 Custo FIFO 1
+D3_CUSRP1 Custo Reposição 1
+D3_CMRP Custo Repos. Unit.
+D3_CMFIX Custo Unit. Fixo
+D4_SLDEMP Sld. Qtd. Empenh.
+D4_SLDEMP2 Sld.Qtd.Emp.2aUM
+D6_VRUNIT Valor Unit.
+D6_PRCREF Preço Refere.
+D8_CUSTO1 Custo
+DE_CUSTO1 Custo Moeda 1
+GA_PRCVEN Preço Venda
+ADB_PRCVEN Preço Venda
+ADB_PRUNIT Preço Lista
+ADB_VALDES Vlr. Desconto
+DA1_PRCBAS Preço Base
+DA1_PRCVEN Preço Venda
+DA1_VLRDES Vlr. Desconto
+AIB_PRCCOM Preço Unit.
+W1_PRECO Preço Unitário
+W2_FOB_TOT Total FOB
+W3_PRECO Preço Unitário
+W3_CUSTO Custo
+W4_FOB_TOT Total FOB
+W5_PRECO Preço Unitário
+W6_FOB_TOT Total FOB
+W6_PRECO Preço Unitário
+W8_PRECO Preço Unitário
+W8_PRECO_F FOB Aduana
+W9_FOB_TOT Total FOB
+WA_SLDANT Saldo Disponível
+WE_PRECO Preço Unitário
+WK_VL_US01 Valor em US$ 01 a 12
+WN_PRECO Preço Unitário US$
+WN_PRUNI Preço Unitário R$
+WT_VL_UNIT Vl Unit Cond Venda
+WT_FOB_UNI Vl. FOB Unitário
+WT_FOB_TOT Vl. FOB Total
+EI2_PRECO Preço Unitário US$
+EI2_PRUNI Preço Unitário R$
+EI4_FOB_GE Valor total FOB
+EI5_PRECO Preço Unitário
+EIS_PRECO Preço Unitário
+EE8_PRECO Preço Unitário
+EE8_PRENEG Preço Negociado      
+EE8_PRECOI Preço FOB
+EE8_PRCFIX Preço Fixado
+EE8_PRCUN Preço Unit. Incoterm  
+EE9_PRECO Preço Unitário
+EE9_PRECOI Preço FOB
+EE9_VLPAG Preço Unit. A Pagar
+EE9_PRCUN Preço Unit. Incoterm
+EE9_VLSCOB Vl Tot sem Cobertura
+EEM_VLNF Valor da NF
+EEM_VLMERC Valor Mercadoria
+EEM_VLNFM Valor NF na Moeda
+EES_VLNF Valor da NF
+EES_VLMERC Valor Mercadoria
+EES_VLNFM Valor NF na Moeda
+EES_VLMERM Vl Merc. Na Moeda
+EES_VALDEV Valor Devolvido
+EX5_PRECO Preço Unitário
+EX6_PRECO Preço Unitário
+EXR_PRECO Preço Unitário
+EXR_PRCTOT Preço Total Item
+EXR_PRCINC Preço Total FOB
+EXS_PRECO Preço Unitário
+ED1_PRCUNI Preço Unitário US$
+ED2_PRCUNI Preço Unitário US$
+EDG_PRCUNI Preço Unitário

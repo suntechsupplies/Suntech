@@ -1,0 +1,54 @@
+#include 'protheus.ch'
+#include 'parmtype.ch'
+/*---------------------------------------------------------------------------------------------
+{Protheus.doc}  M410STTS
+                Este ponto de entrada pertence à rotina de pedidos de venda, MATA410().
+                Está em todas as rotinas de inclusão, alteração, exclusão, cópia e devolução 
+                de compras.
+                Executado após todas as alterações no arquivo de pedidos terem sido feitas
+@type           function
+@version        1.1
+@author         Carlos Eduardo Saturnino - Atlanta Consulting
+@since          07/04/2022
+---------------------------------------------------------------------------------------------*/
+user function M410STTS()
+	
+	Local _nOper 	:= PARAMIXB[1]
+	Local _cFilial	:= SC5->C5_FILIAL
+	Local _cPedido	:= SC5->C5_NUM
+	
+	/*******************************************
+	3 - Inclusão
+	4 - Alteração
+	5 - Exclusão
+	6 - Copia
+	7 - Devolução de Compras
+	/*******************************************/
+	
+	If reclock("SC5", .F.)
+		SC5->C5_STATU1  := cValtoChar(_nOper) // Campo de Controle do Acacias
+		SC5->C5_ZSTATUS := cValtoChar(_nOper) // Suntech (Ricardo Araujo) - Gravar campo de controle para Integração via API 17/01/2023
+	Endif
+	
+	//---------------------------------------------------------
+	// Posiciona nos itens do pedido de vendas
+	//---------------------------------------------------------
+
+	DBSelectArea("SC6")
+	dbSetOrder(1)
+	dbGoTop()
+	If dbSeek(SC6->(C6_FILIAL+C6_NUM+C6_ITEM+C6_PRODUTO))
+		While ! SC6->(Eof()) .And. SC6->(C6_FILIAL+C6_NUM) == _cFilial + _cPedido .And. SC6->D_E_L_E_T_ <> '*'
+			//---------------------------------------------------------
+			// Efetua a gravação dos itens do pedido de Vendas
+			//---------------------------------------------------------
+			If SC6->(Reclock("SC6", .F.))
+				SC6->C6_STATU1  := cValtoChar(_nOper) // Campo de Controle do Acacias
+				SC6->C6_ZSTATUS := cValtoChar(_nOper) // Suntech (Ricardo Araujo) - Gravar campo de controle para Integração via API 17/01/2023
+			Endif
+			SC6->(MsUnlock())
+			SC6->(dbSkip())
+		EndDo
+	Endif
+
+return
