@@ -13,6 +13,23 @@
 			"extendFeatures": {
 				"charDetails": false
 			}
+		},
+		{
+			"type": "totvs_language_web_debug",
+			"request": "launch",
+			"name": "Smart Client Web Debug",
+			"program": "${command:AskForProgramName}",
+			"isMultiSession": true,
+			"enableTableSync": true,
+			"cwb": "${workspaceFolder}",
+			"smartclientUrl": "https://suntechsupplies170774.protheus.cloudtotvs.com.br:1611/webapp/"
 		}
-	]
+	],
+	"lastPrograms": [
+		{
+			"label": "SIGAFAT"
+		}
+	],
+	"lastProgramExecuted": "SIGAFAT",
+	"lastProgramArguments": []
 }

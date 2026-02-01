@@ -409,14 +409,6 @@ user function ImpDfEtq(cUrl, cIdEnt, lUsaColab)
             endif    
             lOk := .T.
 
-            //| Add por Ricardo Araujo - Chamada para impressão e envio de boletos (inicio)  | Suntech Supplies
-            If !Alltrim(SF2->F2_DOC) $ Alltrim(GetMv('CP_BOLCOND'))
-                //If GetMV("CP_BOLIMP") .And. ExistBlock("BOLHBIMP",.F.,.T.) 
-                If ExistBlock("BOLHBIMP",.F.,.T.) 
-                    ExecBlock("BOLHBIMP",.F.,.T.,{1,aNotas[nNotas][2], aNotas[nNotas][3]})  //|impressão do boleto
-                EndIf               
-            EndIf
-            //| Add por Ricardo Araujo - Chamada para impressão e envio de boletos (fim)  | Suntech Supplies
         endif
 
     next
@@ -584,8 +576,6 @@ static function impZebra(aNFe, aEmit, aDest)
 
     local cFontMaior := "016,013" //Fonte maior - títulos dos campos obrigatórios do DANFE ("altura da fonte, largura da fonte")
     local cFontMenor := "015,008" //Fonte menor - campos variáveis do DANFE ("altura da fonte, largura da fonte")
-    local cFontNota  := "025,022" //Fonte para o número da nota fiscal e serie ("altura da fonte, largura da fonte")
-    local cFontDest  := "025,022" //Fonte para o número da nota fiscal e serie ("altura da fonte, largura da fonte")
 
     local lProtEPEC  := .F.
     local lNomeEmit  := .F.
@@ -605,7 +595,7 @@ static function impZebra(aNFe, aEmit, aDest)
     local nValor     := 9
     local nTamEmit   := len( allTrim( aEmit[nNome] ) ) //Quantidade de caracteres da razão social do emitente
     local nTamDest   := len( allTrim( aDest[nNome] ) ) //Quantidade de caracteres da razão social do destinatário
-    local nMaxNome   := 31 //Quantidade de caracteres máxima da primeira linha da razão social
+    local nMaxNome   := 34 //Quantidade de caracteres máxima da primeira linha da razão social
 
     Default aNFe     := {}
     Default aEmit    := {}
@@ -659,7 +649,7 @@ static function impZebra(aNFe, aEmit, aDest)
     MSCBSay(04  , 70    , "IE:"               , "N", "A", cFontMaior)
     MSCBSay(04  , 73.75 , "UF:"               , "N", "A", cFontMaior)
     MSCBSay(04  , 88.75 , "SERIE:"            , "N", "A", cFontMaior)
-  //MSCBSay(04  , 93.75 , "N_A7:"             , "N", "A", cFontMaior) // Ricardo Araujo - Alterado de "N_A7" para "N°" para não imprimir e ceder espaço para o numero da nota fiscal
+    MSCBSay(04  , 93.75 , "N_A7:"             , "N", "A", cFontMaior)
     MSCBSay(34  , 88.75 , "DATA EMISSAO:"     , "N", "A", cFontMaior)
     MSCBSay(65.5, 88.75 , "TIPO OPER.:"       , "N", "A", cFontMaior)
     MSCBSay(65.5, 92.5  , "0 - ENTRADA"       , "N", "A", cFontMenor)
@@ -668,18 +658,18 @@ static function impZebra(aNFe, aEmit, aDest)
     MSCBSay(04  , 113.75, "NOME/RAZAO SOCIAL:", "N", "A", cFontMaior)
 
     if lDestJurid
-        MSCBSay(04, 123.75, "CNPJ:", "N", "A", cFontMaior) // Ricardo Araujo - Alterado de 120.00 para 123.75
+        MSCBSay(04, 120, "CNPJ:", "N", "A", cFontMaior)
     else
-        MSCBSay(04, 123.75, "CPF:" , "N", "A", cFontMaior) // Ricardo Araujo - Alterado de 120.00 para 123.75
+        MSCBSay(04, 120, "CPF:" , "N", "A", cFontMaior)
     endIf
 
-    MSCBSay(04  , 127.5 , "IE:"         , "N", "A", cFontMaior) // Ricardo Araujo - Alterado a linha de 123.75 para 127.5
-    MSCBSay(04  , 131.25, "UF:"         , "N", "A", cFontMaior) // Ricardo Araujo - Alterado a linha de 127.5 para 131.25
+    MSCBSay(04  , 123.75, "IE:"         , "N", "A", cFontMaior)
+    MSCBSay(04  , 127.5 , "UF:"         , "N", "A", cFontMaior)
     MSCBSay(04  , 142.5 , "VALOR TOTAL:", "N", "A", cFontMaior)
     MSCBSay(62.5, 142.5 , "R$"          , "N", "A", cFontMaior)
 
-    lNomeEmit := nTamEmit > nMaxNome // Ricardo Araujo - Se quantidade de caracteres da razão social do emitente for maior que o permitido para a primeira linha lNomeEmit := T
-    lNomeDest := nTamDest > nMaxNome // Ricardo Araujo - Se quantidade de caracteres da razão social do destinatário for maior que o permitido para a primeira linha lNomeDest := T
+    lNomeEmit := nTamEmit > nMaxNome //Se quantidade de caracteres da razão social do emitente for maior que o permitido para a primeira linha lNomeEmit := T
+    lNomeDest := nTamDest > nMaxNome //Se quantidade de caracteres da razão social do destinatário for maior que o permitido para a primeira linha lNomeDest := T
 
     //Criação dos campos de textos variáveis da etiqueta
     MSCBSay(09, 39, transform( aNFe[nChave], "@R 9999 9999 9999 9999 9999 9999 9999 9999 9999 9999 9999" ), "N", "A", cFontMenor)
@@ -705,26 +695,26 @@ static function impZebra(aNFe, aEmit, aDest)
 
     MSCBSay(11, 70,    aEmit[nIE], "N", "A", cFontMenor)
     MSCBSay(11, 73.75, aEmit[nUF], "N", "A", cFontMenor)
-    MSCBSay(18, 88.75, aNFe[nSerie], "N", "A", cFontNota)  
-    MSCBSay(04, 93.75, aNFe[nNumero], "N", "A", cFontNota) // Ricardo Araujo - Alterado a posição do número para nota fiscal para iniciar em 04 até 93.75
+    MSCBSay(18, 88.75, aNFe[nSerie], "N", "A", cFontMenor)
+    MSCBSay(11, 93.75, aNFe[nNumero], "N", "A", cFontMenor)
     MSCBSay(40, 93.75, ajustaData( aNFe[nData] ) , "N", "A", cFontMenor)
     MSCBSay(93, 88.75, aNFe[nOperacao], "N", "A", cFontMenor)
 
     if lNomeDest
-        MSCBSay(04, 116.25, allTrim( subStr( aDest[nNome], 1, nMaxNome ) ), "N", "A", cFontDest)  // Ricardo Araujo - Alterado a Coluna de 44 para 04 e a Linha de 113.75 para 116.25
-        MSCBSay(04, 119.75, allTrim( subStr( aDest[nNome], nMaxNome + 1, nTamDest ) ), "N", "A", cFontDest) // Ricardo Araujo - Alterado a Coluna de 44 para 04 e a Linha de 116.25 para 119.75
+        MSCBSay(44, 113.75, allTrim( subStr( aDest[nNome], 1, nMaxNome ) ), "N", "A", cFontMenor)
+        MSCBSay(04, 116.25, allTrim( subStr( aDest[nNome], nMaxNome + 1, nTamDest ) ), "N", "A", cFontMenor)
     else
-        MSCBSay(04, 116.25, allTrim( aDest[nNome] ), "N", "A", cFontDest)
+        MSCBSay(44, 113.75, allTrim( aDest[nNome] ), "N", "A", cFontMenor)
     endIf
 
     if lDestJurid
-        MSCBSay(15, 123.75, transform( aDest[nCNPJ], "@R 99.999.999/9999-99" ), "N", "A", cFontMenor) // Ricardo Araujo - Destinatário pessoa jurídica Alterado de 120.00 para 123.75
+        MSCBSay(15, 120, transform( aDest[nCNPJ], "@R 99.999.999/9999-99" ), "N", "A", cFontMenor) //Destinatário pessoa jurídica
     else
-        MSCBSay(15, 123.75, transform( aDest[nCNPJ], "@R 999.999.999-99" ), "N", "A", cFontMenor) // Ricardo Araujo - Destinatário pessoa física Alterado de 120.00 para 123.75
+        MSCBSay(15, 120, transform( aDest[nCNPJ], "@R 999.999.999-99" ), "N", "A", cFontMenor) //Destinatário pessoa física
     endIf
 
-    MSCBSay(11, 127.5 , aDest[nIE]  , "N", "A", cFontMenor) // Ricardo Araujo - Alterado a linha de 123.75 para 127.5
-    MSCBSay(11, 131.25, aDest[nUF]  , "N", "A", cFontMenor) // Ricardo Araujo - Alterado a linha de 127.5 para 131.25
+    MSCBSay(11, 123.75, aDest[nIE]  , "N", "A", cFontMenor)
+    MSCBSay(11, 127.5 , aDest[nUF]  , "N", "A", cFontMenor)
     MSCBSay(70, 142.5 , aNFe[nValor], "N", "A", cFontMenor)
 
     //Finaliza a impressão
