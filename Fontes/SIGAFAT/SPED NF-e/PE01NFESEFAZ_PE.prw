@@ -61,34 +61,6 @@ User Function PE01NFESEFAZ()
 	//Local _cEndEnt	:= SA1->(A1_ENDENT + A1_COMPENT + A1_BAIRROE 	+ A1_ESTE 	+ A1_MUNC )
 	//						   OK				  OK		   OK			  OK          OK	
 
-	//--------------------------------------------------------------------------------
-	// @ Ricardo Araujo - Suntech - 02/02/2026
-	// Preenche a data de entrega (F2_DTENTR) com base na data prevista do pedido (C5_FECENT)
-	// Se C5_FECENT estiver vazio, usa a data de emissão + 5 dias
-	//--------------------------------------------------------------------------------
-	If cTipo == TIPO_SAIDA
-		
-		// Posiciona no pedido de venda para buscar a data prevista de entrega
-		DbSelectArea("SC5")
-		DbSetOrder(1) // C5_FILIAL + C5_NUM
-		If DbSeek(xFilial("SC5") + SC6->C6_NUM)
-			
-			If !Empty(SC5->C5_FECENT)
-				// Usa a data prevista de entrega do pedido
-				RecLock("SF2", .F.)
-					SF2->F2_DTENTR := SC5->C5_FECENT
-				MsUnlock()
-			Else
-				// Usa a data de emissão + 5 dias
-				RecLock("SF2", .F.)
-					SF2->F2_DTENTR := SF2->F2_EMISSAO + 5
-				MsUnlock()
-			EndIf
-			
-		EndIf
-		
-	EndIf
-
 	// Efetua a soma da quantidade total de produtos na Nota Fiscal
 	For _nX:= 1 to Len(aProd)
 		_nQuant += aProd[_nX][09]
