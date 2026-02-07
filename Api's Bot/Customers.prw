@@ -297,7 +297,7 @@ Static Function GetSingleCustomer(oSelf)
 Return lRet
 
 //=============================================================
-// CreateCustomer - Insert new customer
+// CreateCustomer - Insert new customer with error handling
 //=============================================================
 Static Function CreateCustomer(oSelf, oObj)
 
@@ -309,81 +309,118 @@ Static Function CreateCustomer(oSelf, oObj)
     Local cStore     := ""
     Local cError     := ""
     Local oResult    := Nil
+    Local oError     := Nil
+    Local bOldErr    := Nil
     
     Private lMsErroAuto := .F.
     Private lMsHelpAuto := .F.
     
-    // Validate required fields
-    If !ValidateCustomerData(oObj, @cError, .T.)
-        oResponse := BuildResponse(.F., cError, Nil, Nil)
-        oSelf:SetContentType("application/json")
-        oSelf:SetStatus(400)
-        oSelf:SetResponse(oResponse)
-        Return .F.
-    EndIf
+    // Set up error handler
+    bOldErr := ErrorBlock({|e| oError := e, Break(e)})
     
-    // Check if customer already exists (by CNPJ/CPF)
-    cTaxId := oObj:taxId
-    DbSelectArea("SA1")
-    DbSetOrder(3)
-    If DbSeek(xFilial("SA1") + PadR(cTaxId, TamSX3("A1_CGC")[1]))
+    Begin Sequence
+    
+        // Validate required fields
+        If !ValidateCustomerData(oObj, @cError, .T.)
+            oResponse := BuildResponse(.F., cError, Nil, Nil)
+            oSelf:SetContentType("application/json")
+            oSelf:SetStatus(400)
+            oSelf:SetResponse(oResponse)
+            ErrorBlock(bOldErr)
+            Return .F.
+        EndIf
+        
+        // Get taxId using safe getter
+        cTaxId := GetJsonString(oObj, "taxId", "")
+        
+        // Check if customer already exists (by CNPJ/CPF)
+        DbSelectArea("SA1")
+        DbSetOrder(3)
+        If DbSeek(xFilial("SA1") + PadR(cTaxId, TamSX3("A1_CGC")[1]))
+            oResult := JsonObject():New()
+            oResult['code']  := AllTrim(SA1->A1_COD)
+            oResult['store'] := AllTrim(SA1->A1_LOJA)
+            oResponse := BuildResponse(.F., "Customer with this CNPJ/CPF already exists", oResult, Nil)
+            oSelf:SetContentType("application/json")
+            oSelf:SetStatus(409) // Conflict
+            oSelf:SetResponse(oResponse)
+            ErrorBlock(bOldErr)
+            Return .F.
+        EndIf
+        
+        // Build data array for MsExecAuto
+        aData := MakeDataArray(oObj, .T.)
+        
+        // Get next code
+        cCode := GetSxeNum("SA1", "A1_COD")
+        cStore := GetJsonString(oObj, "store", "01")
+        If Empty(cStore)
+            cStore := "01"
+        EndIf
+        
+        aAdd(aData, {"A1_FILIAL", xFilial("SA1"), Nil})
+        aAdd(aData, {"A1_COD", cCode, Nil})
+        aAdd(aData, {"A1_LOJA", cStore, Nil})
+        
+        // Execute MATA030 (Include = 3)
+        MsExecAuto({|x,y| MATA030(x,y)}, aData, 3)
+        
+        If lMsErroAuto
+            RollBackSx8()
+            cError := GetAutoError()
+            ConOut("[CUSTOMERS API] MsExecAuto Error (CREATE): " + cError)
+            oResponse := BuildResponse(.F., "Error creating customer: " + cError, Nil, Nil)
+            oSelf:SetContentType("application/json")
+            oSelf:SetStatus(422) // Unprocessable Entity - business validation error
+            oSelf:SetResponse(oResponse)
+            ErrorBlock(bOldErr)
+            Return .F.
+        EndIf
+        
+        ConfirmSx8()
+        
+        // Get the created record
+        DbSelectArea("SA1")
+        DbSetOrder(1)
+        DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]) + PadR(cStore, TamSX3("A1_LOJA")[1]))
+        
+        // Return created customer data
         oResult := JsonObject():New()
-        oResult['code']  := AllTrim(SA1->A1_COD)
-        oResult['store'] := AllTrim(SA1->A1_LOJA)
-        oResponse := BuildResponse(.F., "Customer with this CNPJ/CPF already exists", oResult, Nil)
+        oResult['code']   := AllTrim(cCode)
+        oResult['store']  := AllTrim(cStore)
+        oResult['taxId']  := AllTrim(cTaxId)
+        oResult['recno']  := SA1->(RecNo())
+        
+        oResponse := BuildResponse(.T., "Customer created successfully", oResult, Nil)
         oSelf:SetContentType("application/json")
-        oSelf:SetStatus(409) // Conflict
+        oSelf:SetStatus(201) // Created
         oSelf:SetResponse(oResponse)
-        Return .F.
-    EndIf
-    
-    // Build data array for MsExecAuto
-    aData := MakeDataArray(oObj, .T.)
-    
-    // Get next code
-    cCode := GetSxeNum("SA1", "A1_COD")
-    cStore := IIf(ValType(oObj:store) == "C" .And. !Empty(oObj:store), oObj:store, "01")
-    
-    aAdd(aData, {"A1_FILIAL", xFilial("SA1"), Nil})
-    aAdd(aData, {"A1_COD", cCode, Nil})
-    aAdd(aData, {"A1_LOJA", cStore, Nil})
-    
-    // Execute MATA030 (Include = 3)
-    MsExecAuto({|x,y| MATA030(x,y)}, aData, 3)
-    
-    If lMsErroAuto
-        RollBackSx8()
-        cError := GetAutoError()
-        oResponse := BuildResponse(.F., "Error creating customer: " + cError, Nil, Nil)
+        
+    Recover Using oError
+        
+        // Handle unexpected errors - log to server console
+        cError := "Unexpected error: " + oError:Description + " at " + oError:Operation
+        If !Empty(oError:ErrorStack)
+            cError += " | Stack: " + oError:ErrorStack
+        EndIf
+        
+        ConOut("[CUSTOMERS API] Unexpected Error (CREATE): " + cError)
+        ConOut("[CUSTOMERS API] ErrorStack: " + oError:ErrorStack)
+        
+        oResponse := BuildResponse(.F., FwNoAccent(cError), Nil, Nil)
         oSelf:SetContentType("application/json")
-        oSelf:SetStatus(500)
+        oSelf:SetStatus(520) // Custom error code to differentiate from system 500
         oSelf:SetResponse(oResponse)
-        Return .F.
-    EndIf
+        lRet := .F.
+        
+    End Sequence
     
-    ConfirmSx8()
-    
-    // Get the created record
-    DbSelectArea("SA1")
-    DbSetOrder(1)
-    DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]) + PadR(cStore, TamSX3("A1_LOJA")[1]))
-    
-    // Return created customer data
-    oResult := JsonObject():New()
-    oResult['code']   := AllTrim(cCode)
-    oResult['store']  := AllTrim(cStore)
-    oResult['taxId']  := AllTrim(cTaxId)
-    oResult['recno']  := SA1->(RecNo())
-    
-    oResponse := BuildResponse(.T., "Customer created successfully", oResult, Nil)
-    oSelf:SetContentType("application/json")
-    oSelf:SetStatus(201) // Created
-    oSelf:SetResponse(oResponse)
+    ErrorBlock(bOldErr)
 
 Return lRet
 
 //=============================================================
-// UpdateCustomer - Update existing customer
+// UpdateCustomer - Update existing customer with error handling
 //=============================================================
 Static Function UpdateCustomer(oSelf, oObj)
 
@@ -394,116 +431,556 @@ Static Function UpdateCustomer(oSelf, oObj)
     Local cStore     := ""
     Local cError     := ""
     Local oResult    := Nil
+    Local oError     := Nil
+    Local bOldErr    := Nil
     
     Private lMsErroAuto := .F.
     Private lMsHelpAuto := .F.
     
-    // Validate required fields for update
-    If !ValidateCustomerData(oObj, @cError, .F.)
-        oResponse := BuildResponse(.F., cError, Nil, Nil)
+    // Set up error handler
+    bOldErr := ErrorBlock({|e| oError := e, Break(e)})
+    
+    Begin Sequence
+    
+        // Validate required fields for update
+        If !ValidateCustomerData(oObj, @cError, .F.)
+            oResponse := BuildResponse(.F., cError, Nil, Nil)
+            oSelf:SetContentType("application/json")
+            oSelf:SetStatus(400)
+            oSelf:SetResponse(oResponse)
+            ErrorBlock(bOldErr)
+            Return .F.
+        EndIf
+        
+        // Get customer code and store using safe getters
+        cCode  := GetJsonString(oObj, "code", "")
+        cStore := GetJsonString(oObj, "store", "01")
+        If Empty(cStore)
+            cStore := "01"
+        EndIf
+        
+        If Empty(cCode)
+            oResponse := BuildResponse(.F., "Customer code is required for update", Nil, Nil)
+            oSelf:SetContentType("application/json")
+            oSelf:SetStatus(400)
+            oSelf:SetResponse(oResponse)
+            ErrorBlock(bOldErr)
+            Return .F.
+        EndIf
+    
+        // Check if customer exists
+        DbSelectArea("SA1")
+        DbSetOrder(1)
+        If !DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]) + PadR(cStore, TamSX3("A1_LOJA")[1]))
+            oResponse := BuildResponse(.F., "Customer not found", Nil, Nil)
+            oSelf:SetContentType("application/json")
+            oSelf:SetStatus(404)
+            oSelf:SetResponse(oResponse)
+            ErrorBlock(bOldErr)
+            Return .F.
+        EndIf
+        
+        // Build data array for MsExecAuto
+        aData := MakeDataArray(oObj, .F.)
+        
+        aAdd(aData, {"A1_FILIAL", xFilial("SA1"), Nil})
+        aAdd(aData, {"A1_COD", PadR(cCode, TamSX3("A1_COD")[1]), Nil})
+        aAdd(aData, {"A1_LOJA", PadR(cStore, TamSX3("A1_LOJA")[1]), Nil})
+        
+        // Execute MATA030 (Update = 4)
+        MsExecAuto({|x,y| MATA030(x,y)}, aData, 4)
+        
+        If lMsErroAuto
+            cError := GetAutoError()
+            ConOut("[CUSTOMERS API] MsExecAuto Error (UPDATE): " + cError)
+            oResponse := BuildResponse(.F., "Error updating customer: " + cError, Nil, Nil)
+            oSelf:SetContentType("application/json")
+            oSelf:SetStatus(422) // Unprocessable Entity - business validation error
+            oSelf:SetResponse(oResponse)
+            ErrorBlock(bOldErr)
+            Return .F.
+        EndIf
+        
+        // Reposition to get RECNO
+        DbSelectArea("SA1")
+        DbSetOrder(1)
+        DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]) + PadR(cStore, TamSX3("A1_LOJA")[1]))
+        
+        // Return updated customer data
+        oResult := JsonObject():New()
+        oResult['code']  := AllTrim(cCode)
+        oResult['store'] := AllTrim(cStore)
+        oResult['recno'] := SA1->(RecNo())
+        
+        oResponse := BuildResponse(.T., "Customer updated successfully", oResult, Nil)
         oSelf:SetContentType("application/json")
-        oSelf:SetStatus(400)
         oSelf:SetResponse(oResponse)
-        Return .F.
-    EndIf
-    
-    // Get customer code and store
-    cCode  := IIf(ValType(oObj:code) == "C", oObj:code, "")
-    cStore := IIf(ValType(oObj:store) == "C", oObj:store, "01")
-    
-    If Empty(cCode)
-        oResponse := BuildResponse(.F., "Customer code is required for update", Nil, Nil)
+        
+    Recover Using oError
+        
+        // Handle unexpected errors - log to server console
+        cError := "Unexpected error: " + oError:Description + " at " + oError:Operation
+        If !Empty(oError:ErrorStack)
+            cError += " | Stack: " + oError:ErrorStack
+        EndIf
+        
+        ConOut("[CUSTOMERS API] Unexpected Error (UPDATE): " + cError)
+        ConOut("[CUSTOMERS API] ErrorStack: " + oError:ErrorStack)
+        
+        oResponse := BuildResponse(.F., FwNoAccent(cError), Nil, Nil)
         oSelf:SetContentType("application/json")
-        oSelf:SetStatus(400)
+        oSelf:SetStatus(520) // Custom error code to differentiate from system 500
         oSelf:SetResponse(oResponse)
-        Return .F.
-    EndIf
+        lRet := .F.
+        
+    End Sequence
     
-    // Check if customer exists
-    DbSelectArea("SA1")
-    DbSetOrder(1)
-    If !DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]) + PadR(cStore, TamSX3("A1_LOJA")[1]))
-        oResponse := BuildResponse(.F., "Customer not found", Nil, Nil)
-        oSelf:SetContentType("application/json")
-        oSelf:SetStatus(404)
-        oSelf:SetResponse(oResponse)
-        Return .F.
-    EndIf
-    
-    // Build data array for MsExecAuto
-    aData := MakeDataArray(oObj, .F.)
-    
-    aAdd(aData, {"A1_FILIAL", xFilial("SA1"), Nil})
-    aAdd(aData, {"A1_COD", PadR(cCode, TamSX3("A1_COD")[1]), Nil})
-    aAdd(aData, {"A1_LOJA", PadR(cStore, TamSX3("A1_LOJA")[1]), Nil})
-    
-    // Execute MATA030 (Update = 4)
-    MsExecAuto({|x,y| MATA030(x,y)}, aData, 4)
-    
-    If lMsErroAuto
-        cError := GetAutoError()
-        oResponse := BuildResponse(.F., "Error updating customer: " + cError, Nil, Nil)
-        oSelf:SetContentType("application/json")
-        oSelf:SetStatus(500)
-        oSelf:SetResponse(oResponse)
-        Return .F.
-    EndIf
-    
-    // Reposition to get RECNO
-    DbSelectArea("SA1")
-    DbSetOrder(1)
-    DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]) + PadR(cStore, TamSX3("A1_LOJA")[1]))
-    
-    // Return updated customer data
-    oResult := JsonObject():New()
-    oResult['code']  := AllTrim(cCode)
-    oResult['store'] := AllTrim(cStore)
-    oResult['recno'] := SA1->(RecNo())
-    
-    oResponse := BuildResponse(.T., "Customer updated successfully", oResult, Nil)
-    oSelf:SetContentType("application/json")
-    oSelf:SetResponse(oResponse)
+    ErrorBlock(bOldErr)
 
 Return lRet
 
 //=============================================================
-// ValidateCustomerData - Validate required fields
+// ValidateCustomerData - Validate required fields with detailed errors
 //=============================================================
 Static Function ValidateCustomerData(oObj, cError, lInsert)
 
-    Local lRet := .T.
+    Local lRet         := .T.
+    Local aErrors      := {}
+    Local cName        := ""
+    Local cTaxId       := ""
+    Local cCode        := ""
+    Local cPersonType  := ""
+    Local cCustomerType:= ""
+    Local cState       := ""
+    Local cIcms        := ""
+    Local cB2B         := ""
+    Local cEmail       := ""
+    Local cZip         := ""
     
     cError := ""
     
-    // For insert, taxId and name are required
+    // Validate object
+    If oObj == Nil .Or. ValType(oObj) != "O"
+        cError := "Invalid request body: JSON object expected"
+        Return .F.
+    EndIf
+    
+    // For insert, validate required fields
     If lInsert
-        If ValType(oObj:taxId) != "C" .Or. Empty(oObj:taxId)
-            cError := "CNPJ/CPF (taxId) is required"
-            Return .F.
+        // taxId (CNPJ/CPF) - Required and sanitized
+        cTaxId := SanitizeTaxId(GetJsonString(oObj, "taxId", ""))
+        If Empty(cTaxId)
+            aAdd(aErrors, "taxId (CNPJ/CPF) is required")
+        ElseIf Len(cTaxId) < 11
+            aAdd(aErrors, "taxId must have at least 11 digits (CPF) or 14 (CNPJ) after removing formatting")
+        ElseIf Len(cTaxId) != 11 .And. Len(cTaxId) != 14
+            aAdd(aErrors, "taxId must have exactly 11 digits (CPF) or 14 digits (CNPJ)")
         EndIf
         
-        If ValType(oObj:name) != "C" .Or. Empty(oObj:name)
-            cError := "Customer name is required"
-            Return .F.
+        // name - Required
+        cName := GetJsonString(oObj, "name", "")
+        If Empty(cName)
+            aAdd(aErrors, "name (Customer name) is required")
+        ElseIf Len(AllTrim(cName)) < 3
+            aAdd(aErrors, "name must have at least 3 characters")
         EndIf
     EndIf
     
     // For update, code is required
     If !lInsert
-        If ValType(oObj:code) != "C" .Or. Empty(oObj:code)
-            cError := "Customer code is required for update"
-            Return .F.
+        cCode := GetJsonString(oObj, "code", "")
+        If Empty(cCode)
+            aAdd(aErrors, "code (Customer code) is required for update")
         EndIf
+    EndIf
+    
+    // Optional field validations (validate type if provided)
+    cPersonType := GetJsonString(oObj, "personType", "")
+    If !Empty(cPersonType) .And. !(cPersonType $ "J|F")
+        aAdd(aErrors, "personType must be 'J' (Juridica) or 'F' (Fisica)")
+    EndIf
+    
+    cCustomerType := GetJsonString(oObj, "customerType", "")
+    If !Empty(cCustomerType) .And. !(cCustomerType $ "R|L|F|S|X")
+        aAdd(aErrors, "customerType must be: R (Revendedor), L (Solidario), F (Consumidor Final), S (Produtor Rural), X (Exportacao)")
+    EndIf
+    
+    cState := GetJsonString(oObj, "state", "")
+    If !Empty(cState) .And. Len(AllTrim(cState)) != 2
+        aAdd(aErrors, "state must be 2 characters (e.g. SP, RJ, MG)")
+    EndIf
+    
+    // Validate icmsContributor
+    If HasJsonProperty(oObj, "icmsContributor")
+        cIcms := GetJsonString(oObj, "icmsContributor", "")
+        If !Empty(cIcms) .And. !(cIcms $ "1|2|9")
+            aAdd(aErrors, "icmsContributor must be: 1 (Contribuinte), 2 (Isento), 9 (Nao Contribuinte)")
+        EndIf
+    EndIf
+    
+    // Validate enabledB2B
+    If HasJsonProperty(oObj, "enabledB2B")
+        cB2B := GetJsonString(oObj, "enabledB2B", "")
+        If !Empty(cB2B) .And. !(cB2B $ "1|2")
+            aAdd(aErrors, "enabledB2B must be: 1 (Sim) or 2 (Nao)")
+        EndIf
+    EndIf
+    
+    // Validate email format
+    If HasJsonProperty(oObj, "email")
+        cEmail := GetJsonString(oObj, "email", "")
+        If !Empty(cEmail)
+            cEmail := AllTrim(cEmail)
+            If At("@", cEmail) == 0 .Or. At(".", cEmail) == 0
+                aAdd(aErrors, "email format is invalid (must contain @ and .)")
+            EndIf
+        EndIf
+    EndIf
+    
+    // Validate zipCode format
+    If HasJsonProperty(oObj, "zipCode")
+        cZip := SanitizeZipCode(GetJsonString(oObj, "zipCode", ""))
+        If !Empty(cZip) .And. Len(cZip) != 8
+            aAdd(aErrors, "zipCode must have 8 digits after removing formatting")
+        EndIf
+    EndIf
+    
+    // Validate foreign key references (only for insert or if provided)
+    // Vendedor (SA3)
+    If lInsert .Or. HasJsonProperty(oObj, "salespersonCode")
+        If !ValidateForeignKey(oObj, "salespersonCode", "SA3", "A3_COD", @aErrors)
+        EndIf
+    EndIf
+    
+    // Condição de Pagamento (SE4)
+    If lInsert .Or. HasJsonProperty(oObj, "paymentCondition")
+        If !ValidateForeignKey(oObj, "paymentCondition", "SE4", "E4_CODIGO", @aErrors)
+        EndIf
+    EndIf
+    
+    // Tabela de Preço (DA0)
+    If lInsert .Or. HasJsonProperty(oObj, "priceTable")
+        If !ValidateForeignKey(oObj, "priceTable", "DA0", "DA0_CODTAB", @aErrors)
+        EndIf
+    EndIf
+    
+    // Transportadora (SA4)
+    If lInsert .Or. HasJsonProperty(oObj, "carrierCode")
+        If !ValidateForeignKey(oObj, "carrierCode", "SA4", "A4_COD", @aErrors)
+        EndIf
+    EndIf
+    
+    // Região (ACJ)
+    If lInsert .Or. HasJsonProperty(oObj, "region")
+        If !ValidateForeignKey(oObj, "region", "ACJ", "ACJ_REGIAO", @aErrors)
+        EndIf
+    EndIf
+    
+    // Grupo de Venda (ACY)
+    If lInsert .Or. HasJsonProperty(oObj, "salesGroup")
+        If !ValidateForeignKey(oObj, "salesGroup", "ACY", "ACY_GRPVEN", @aErrors)
+        EndIf
+    EndIf
+    
+    // Grupo Tributário (SX5 - tabela C1) - Temporarily disabled
+    //If lInsert .Or. HasJsonProperty(oObj, "taxGroup")
+    //    If !ValidFKX5(oObj, "taxGroup", "C1", @aErrors)
+    //    EndIf
+    //EndIf
+    
+    // Build error message if there are any errors
+    If Len(aErrors) > 0
+        cError := "Validation errors: " + ArrayToStr(aErrors, "; ")
+        Return .F.
     EndIf
 
 Return lRet
 
 //=============================================================
-// MakeDataArray - Build array for MsExecAuto
+// ValidateForeignKey - Check if code exists in related table
+//=============================================================
+Static Function ValidateForeignKey(oObj, cProperty, cTable, cField, aErrors)
+
+    Local lValid   := .T.
+    Local cValue   := ""
+    Local cOldArea := ""
+    Local nFieldLen:= 0
+    
+    cValue := SanitizeCode(GetJsonString(oObj, cProperty, ""), cField)
+    
+    // Skip if empty (not provided)
+    If Empty(cValue)
+        Return .T.
+    EndIf
+    
+    // Get field length safely
+    nFieldLen := GetFieldLen(cField)
+    If nFieldLen == 0
+        // Field doesn't exist in dictionary, skip validation
+        Return .T.
+    EndIf
+    
+    // Save current area and validate
+    cOldArea := Alias()
+    
+    Begin Sequence
+        DbSelectArea(cTable)
+        DbSetOrder(1)
+        
+        If !DbSeek(xFilial(cTable) + PadR(cValue, nFieldLen))
+            aAdd(aErrors, cProperty + " '" + AllTrim(cValue) + "' not found in " + cTable)
+            lValid := .F.
+        EndIf
+    Recover
+        // Table might not exist or be accessible
+        lValid := .T.
+    End Sequence
+    
+    // Restore area
+    If !Empty(cOldArea) .And. Select(cOldArea) > 0
+        DbSelectArea(cOldArea)
+    EndIf
+    
+Return lValid
+
+
+
+//=============================================================
+// ArrayToStr - Convert array to delimited string
+//=============================================================
+Static Function ArrayToStr(aArray, cDelim)
+
+    Local cResult := ""
+    Local nX      := 0
+    
+    Default cDelim := ", "
+    
+    For nX := 1 To Len(aArray)
+        If nX > 1
+            cResult += cDelim
+        EndIf
+        cResult += cValToChar(aArray[nX])
+    Next nX
+    
+Return cResult
+
+//=============================================================
+// SANITIZATION FUNCTIONS
+//=============================================================
+
+//=============================================================
+// SanitizeString - Clean and standardize text fields
+// Removes dangerous chars, trims, and optionally converts to upper
+//=============================================================
+Static Function SanitizeString(cValue, cField, lUpper)
+
+    Local cResult := ""
+    Local nMaxLen := 0
+    
+    Default lUpper := .T.
+    
+    If ValType(cValue) != "C" .Or. Empty(cValue)
+        Return ""
+    EndIf
+    
+    cResult := AllTrim(cValue)
+    
+    // Remove dangerous characters for SQL/JSON
+    cResult := StrTran(cResult, "'", "")
+    cResult := StrTran(cResult, '"', "")
+    cResult := StrTran(cResult, "\", "")
+    cResult := StrTran(cResult, Chr(0), "")
+    cResult := StrTran(cResult, Chr(9), " ")  // Tab
+    cResult := StrTran(cResult, Chr(10), " ") // LF
+    cResult := StrTran(cResult, Chr(13), " ") // CR
+    
+    // Convert to uppercase (Protheus standard)
+    If lUpper
+        cResult := Upper(cResult)
+    EndIf
+    
+    // Truncate to field max length if field name provided
+    If !Empty(cField)
+        nMaxLen := GetFieldLen(cField)
+        If nMaxLen > 0 .And. Len(cResult) > nMaxLen
+            cResult := Left(cResult, nMaxLen)
+        EndIf
+    EndIf
+    
+Return cResult
+
+//=============================================================
+// SanitizeTaxId - Clean CNPJ/CPF (remove formatting chars)
+//=============================================================
+Static Function SanitizeTaxId(cValue)
+
+    Local cResult := ""
+    
+    If ValType(cValue) != "C" .Or. Empty(cValue)
+        Return ""
+    EndIf
+    
+    cResult := AllTrim(cValue)
+    
+    // Remove formatting characters
+    cResult := StrTran(cResult, ".", "")
+    cResult := StrTran(cResult, "-", "")
+    cResult := StrTran(cResult, "/", "")
+    cResult := StrTran(cResult, " ", "")
+    
+    // Keep only digits
+    cResult := OnlyNumbers(cResult)
+    
+Return cResult
+
+//=============================================================
+// SanitizePhone - Clean phone numbers (only digits)
+//=============================================================
+Static Function SanitizePhone(cValue)
+
+    Local cResult := ""
+    
+    If ValType(cValue) != "C" .Or. Empty(cValue)
+        Return ""
+    EndIf
+    
+    cResult := AllTrim(cValue)
+    
+    // Remove common phone formatting
+    cResult := StrTran(cResult, "(", "")
+    cResult := StrTran(cResult, ")", "")
+    cResult := StrTran(cResult, "-", "")
+    cResult := StrTran(cResult, " ", "")
+    cResult := StrTran(cResult, "+", "")
+    
+    // Keep only digits
+    cResult := OnlyNumbers(cResult)
+    
+Return cResult
+
+//=============================================================
+// SanitizeZipCode - Clean CEP (only digits)
+//=============================================================
+Static Function SanitizeZipCode(cValue)
+
+    Local cResult := ""
+    
+    If ValType(cValue) != "C" .Or. Empty(cValue)
+        Return ""
+    EndIf
+    
+    cResult := AllTrim(cValue)
+    
+    // Remove formatting
+    cResult := StrTran(cResult, "-", "")
+    cResult := StrTran(cResult, ".", "")
+    cResult := StrTran(cResult, " ", "")
+    
+    // Keep only digits
+    cResult := OnlyNumbers(cResult)
+    
+    // Pad with zeros if needed (CEP has 8 digits)
+    If Len(cResult) > 0 .And. Len(cResult) < 8
+        cResult := PadL(cResult, 8, "0")
+    EndIf
+    
+Return cResult
+
+//=============================================================
+// SanitizeEmail - Clean and validate email format
+//=============================================================
+Static Function SanitizeEmail(cValue)
+
+    Local cResult := ""
+    
+    If ValType(cValue) != "C" .Or. Empty(cValue)
+        Return ""
+    EndIf
+    
+    cResult := AllTrim(cValue)
+    
+    // Email should be lowercase
+    cResult := Lower(cResult)
+    
+    // Remove dangerous characters
+    cResult := StrTran(cResult, "'", "")
+    cResult := StrTran(cResult, '"', "")
+    cResult := StrTran(cResult, " ", "")
+    cResult := StrTran(cResult, "\", "")
+    
+    // Basic email validation (must have @ and .)
+    If At("@", cResult) == 0 .Or. At(".", cResult) == 0
+        Return ""
+    EndIf
+    
+    // Truncate to field max length
+    nMaxLen := GetFieldLen("A1_EMAIL")
+    If nMaxLen > 0 .And. Len(cResult) > nMaxLen
+        cResult := Left(cResult, nMaxLen)
+    EndIf
+    
+Return cResult
+
+//=============================================================
+// OnlyNumbers - Extract only numeric digits from string
+//=============================================================
+Static Function OnlyNumbers(cValue)
+
+    Local cResult := ""
+    Local nX      := 0
+    Local cChar   := ""
+    
+    If ValType(cValue) != "C" .Or. Empty(cValue)
+        Return ""
+    EndIf
+    
+    For nX := 1 To Len(cValue)
+        cChar := SubStr(cValue, nX, 1)
+        If cChar >= "0" .And. cChar <= "9"
+            cResult += cChar
+        EndIf
+    Next nX
+    
+Return cResult
+
+//=============================================================
+// SanitizeCode - Clean code fields (alphanumeric, no special chars)
+//=============================================================
+Static Function SanitizeCode(cValue, cField)
+
+    Local cResult := ""
+    Local nMaxLen := 0
+    
+    If ValType(cValue) != "C" .Or. Empty(cValue)
+        Return ""
+    EndIf
+    
+    cResult := AllTrim(Upper(cValue))
+    
+    // Remove dangerous characters
+    cResult := StrTran(cResult, "'", "")
+    cResult := StrTran(cResult, '"', "")
+    cResult := StrTran(cResult, "\", "")
+    cResult := StrTran(cResult, " ", "")
+    
+    // Truncate to field max length
+    If !Empty(cField)
+        nMaxLen := GetFieldLen(cField)
+        If nMaxLen > 0 .And. Len(cResult) > nMaxLen
+            cResult := Left(cResult, nMaxLen)
+        EndIf
+    EndIf
+    
+Return cResult
+
+//=============================================================
+// MakeDataArray - Build array for MsExecAuto with sanitization
 //=============================================================
 Static Function MakeDataArray(oObj, lInsert)
 
-    Local aData := {}
+    Local aData   := {}
+    Local cValue  := ""
+    Local nValue  := 0
     
     // Auto-fill registration date/time for new customers
     If lInsert
@@ -511,151 +988,191 @@ Static Function MakeDataArray(oObj, lInsert)
         aAdd(aData, {"A1_HRCAD", SubStr(Time(), 1, 5), Nil})
     EndIf
     
-    // Basic identification
-    If ValType(oObj:name) == "C"
-        aAdd(aData, {"A1_NOME", oObj:name, Nil})
+    // Basic identification - with sanitization
+    cValue := SanitizeString(GetJsonString(oObj, "name", ""), "A1_NOME", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_NOME", cValue, Nil})
     EndIf
     
-    If ValType(oObj:shortName) == "C"
-        aAdd(aData, {"A1_NREDUZ", oObj:shortName, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "shortName", ""), "A1_NREDUZ", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_NREDUZ", cValue, Nil})
     EndIf
     
-    If ValType(oObj:taxId) == "C"
-        aAdd(aData, {"A1_CGC", oObj:taxId, Nil})
+    // CNPJ/CPF - remove formatting
+    cValue := SanitizeTaxId(GetJsonString(oObj, "taxId", ""))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_CGC", cValue, Nil})
     EndIf
     
-    If ValType(oObj:stateRegistration) == "C"
-        aAdd(aData, {"A1_INSCR", oObj:stateRegistration, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "stateRegistration", ""), "A1_INSCR", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_INSCR", cValue, Nil})
     EndIf
     
-    If ValType(oObj:municipalRegistration) == "C"
-        aAdd(aData, {"A1_INSCRM", oObj:municipalRegistration, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "municipalRegistration", ""), "A1_INSCRM", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_INSCRM", cValue, Nil})
     EndIf
     
-    If ValType(oObj:personType) == "C"
-        aAdd(aData, {"A1_PESSOA", oObj:personType, Nil})
+    cValue := Upper(AllTrim(GetJsonString(oObj, "personType", "")))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_PESSOA", cValue, Nil})
     EndIf
     
-    If ValType(oObj:customerType) == "C"
-        aAdd(aData, {"A1_TIPO", oObj:customerType, Nil})
+    cValue := Upper(AllTrim(GetJsonString(oObj, "customerType", "")))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_TIPO", cValue, Nil})
     EndIf
     
-    // Address
-    If ValType(oObj:address) == "C"
-        aAdd(aData, {"A1_END", oObj:address, Nil})
+    // Address - with sanitization
+    cValue := SanitizeString(GetJsonString(oObj, "address", ""), "A1_END", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_END", cValue, Nil})
     EndIf
     
-    If ValType(oObj:complement) == "C"
-        aAdd(aData, {"A1_COMPLEM", oObj:complement, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "complement", ""), "A1_COMPLEM", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_COMPLEM", cValue, Nil})
     EndIf
     
-    If ValType(oObj:neighborhood) == "C"
-        aAdd(aData, {"A1_BAIRRO", oObj:neighborhood, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "neighborhood", ""), "A1_BAIRRO", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_BAIRRO", cValue, Nil})
     EndIf
     
-    If ValType(oObj:city) == "C"
-        aAdd(aData, {"A1_MUN", oObj:city, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "city", ""), "A1_MUN", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_MUN", cValue, Nil})
     EndIf
     
-    If ValType(oObj:state) == "C"
-        aAdd(aData, {"A1_EST", oObj:state, Nil})
+    cValue := Upper(AllTrim(GetJsonString(oObj, "state", "")))
+    If !Empty(cValue) .And. Len(cValue) == 2
+        aAdd(aData, {"A1_EST", cValue, Nil})
     EndIf
     
-    If ValType(oObj:zipCode) == "C"
-        aAdd(aData, {"A1_CEP", oObj:zipCode, Nil})
+    // CEP - only numbers
+    cValue := SanitizeZipCode(GetJsonString(oObj, "zipCode", ""))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_CEP", cValue, Nil})
     EndIf
     
-    If ValType(oObj:cityCode) == "C"
-        aAdd(aData, {"A1_COD_MUN", oObj:cityCode, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "cityCode", ""), "A1_COD_MUN")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_COD_MUN", cValue, Nil})
     EndIf
     
-    If ValType(oObj:country) == "C"
-        aAdd(aData, {"A1_PAIS", oObj:country, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "country", ""), "A1_PAIS", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_PAIS", cValue, Nil})
     EndIf
     
-    If ValType(oObj:countryCode) == "C"
-        aAdd(aData, {"A1_CODPAIS", oObj:countryCode, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "countryCode", ""), "A1_CODPAIS")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_CODPAIS", cValue, Nil})
     EndIf
     
-    // Contact - Phone
-    If ValType(oObj:areaCode) == "C"
-        aAdd(aData, {"A1_DDD", oObj:areaCode, Nil})
+    // Contact - Phone (only numbers)
+    cValue := SanitizePhone(GetJsonString(oObj, "areaCode", ""))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_DDD", cValue, Nil})
     EndIf
     
-    If ValType(oObj:phone) == "C"
-        aAdd(aData, {"A1_TEL", oObj:phone, Nil})
+    cValue := SanitizePhone(GetJsonString(oObj, "phone", ""))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_TEL", cValue, Nil})
     EndIf
     
-    If ValType(oObj:fax) == "C"
-        aAdd(aData, {"A1_FAX", oObj:fax, Nil})
+    cValue := SanitizePhone(GetJsonString(oObj, "fax", ""))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_FAX", cValue, Nil})
     EndIf
     
-    // Contact - WhatsApp
-    If ValType(oObj:whatsappAreaCode) == "C" .Or. ValType(oObj:whatsappAreaCode) == "N"
-        aAdd(aData, {"A1_ZZDDDW", Val(cValToChar(oObj:whatsappAreaCode)), Nil})
+    // Contact - WhatsApp (accepts string or number)
+    If HasJsonProperty(oObj, "whatsappAreaCode")
+        nValue := GetJsonNumber(oObj, "whatsappAreaCode", 0)
+        If nValue > 0
+            aAdd(aData, {"A1_ZZDDDW", nValue, Nil})
+        EndIf
     EndIf
     
-    If ValType(oObj:whatsappPhone) == "C"
-        aAdd(aData, {"A1_TELW", oObj:whatsappPhone, Nil})
+    cValue := SanitizePhone(GetJsonString(oObj, "whatsappPhone", ""))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_TELW", cValue, Nil})
     EndIf
     
-    // Contact - Email
-    If ValType(oObj:email) == "C"
-        aAdd(aData, {"A1_EMAIL", oObj:email, Nil})
+    // Contact - Email (lowercase, validated)
+    cValue := SanitizeEmail(GetJsonString(oObj, "email", ""))
+    If !Empty(cValue)
+        aAdd(aData, {"A1_EMAIL", cValue, Nil})
     EndIf
     
-    If ValType(oObj:contact) == "C"
-        aAdd(aData, {"A1_CONTATO", oObj:contact, Nil})
+    cValue := SanitizeString(GetJsonString(oObj, "contact", ""), "A1_CONTATO", .T.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_CONTATO", cValue, Nil})
     EndIf
     
-    // Sales
-    If ValType(oObj:salespersonCode) == "C"
-        aAdd(aData, {"A1_VEND", oObj:salespersonCode, Nil})
+    // Sales - Code fields
+    cValue := SanitizeCode(GetJsonString(oObj, "salespersonCode", ""), "A1_VEND")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_VEND", cValue, Nil})
     EndIf
     
-    If ValType(oObj:paymentCondition) == "C"
-        aAdd(aData, {"A1_COND", oObj:paymentCondition, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "paymentCondition", ""), "A1_COND")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_COND", cValue, Nil})
     EndIf
     
-    If ValType(oObj:priceTable) == "C"
-        aAdd(aData, {"A1_TABELA", oObj:priceTable, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "priceTable", ""), "A1_TABELA")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_TABELA", cValue, Nil})
     EndIf
     
-    If ValType(oObj:region) == "C"
-        aAdd(aData, {"A1_REGIAO", oObj:region, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "region", ""), "A1_REGIAO")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_REGIAO", cValue, Nil})
     EndIf
     
-    If ValType(oObj:salesGroup) == "C"
-        aAdd(aData, {"A1_GRPVEN", oObj:salesGroup, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "salesGroup", ""), "A1_GRPVEN")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_GRPVEN", cValue, Nil})
     EndIf
     
     // Tax
-    If ValType(oObj:taxGroup) == "C"
-        aAdd(aData, {"A1_GRPTRIB", oObj:taxGroup, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "taxGroup", ""), "A1_GRPTRIB")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_GRPTRIB", cValue, Nil})
     EndIf
     
-    If ValType(oObj:icmsContributor) == "C"
-        aAdd(aData, {"A1_CONTRIB", oObj:icmsContributor, Nil})
+    cValue := AllTrim(GetJsonString(oObj, "icmsContributor", ""))
+    If !Empty(cValue) .And. (cValue $ "1|2|9")
+        aAdd(aData, {"A1_CONTRIB", cValue, Nil})
     EndIf
     
     // Financial
-    If ValType(oObj:creditLimit) == "N"
-        aAdd(aData, {"A1_LC", oObj:creditLimit, Nil})
+    If HasJsonProperty(oObj, "creditLimit")
+        nValue := GetJsonNumber(oObj, "creditLimit", 0)
+        If nValue > 0
+            aAdd(aData, {"A1_LC", nValue, Nil})
+        EndIf
     EndIf
     
     // Logistics
-    If ValType(oObj:carrierCode) == "C"
-        aAdd(aData, {"A1_TRANSP", oObj:carrierCode, Nil})
+    cValue := SanitizeCode(GetJsonString(oObj, "carrierCode", ""), "A1_TRANSP")
+    If !Empty(cValue)
+        aAdd(aData, {"A1_TRANSP", cValue, Nil})
     EndIf
     
     // B2B
-    If ValType(oObj:enabledB2B) == "C"
-        aAdd(aData, {"A1_ZZLB2B", oObj:enabledB2B, Nil})
+    cValue := AllTrim(GetJsonString(oObj, "enabledB2B", ""))
+    If !Empty(cValue) .And. (cValue $ "1|2")
+        aAdd(aData, {"A1_ZZLB2B", cValue, Nil})
     EndIf
     
-    // Observation
-    If ValType(oObj:observation) == "C"
-        aAdd(aData, {"A1_OBS", oObj:observation, Nil})
+    // Observation - allow lowercase for memo field
+    cValue := SanitizeString(GetJsonString(oObj, "observation", ""), "A1_OBS", .F.)
+    If !Empty(cValue)
+        aAdd(aData, {"A1_OBS", cValue, Nil})
     EndIf
 
 Return aData
@@ -886,3 +1403,112 @@ Static Function GetAutoError()
     cError := AllTrim(cError)
 
 Return cError
+
+//=============================================================
+// GetJsonValue - Safely get property value from JSON object
+// Returns Nil if property does not exist or on error
+//=============================================================
+Static Function GetJsonValue(oObj, cProperty)
+
+    Local xValue   := Nil
+    Local oError   := Nil
+    Local bOldErr  := Nil
+    
+    If oObj == Nil .Or. ValType(oObj) != "O"
+        Return Nil
+    EndIf
+    
+    If Empty(cProperty) .Or. ValType(cProperty) != "C"
+        Return Nil
+    EndIf
+    
+    // Try to access property safely using ErrorBlock
+    bOldErr := ErrorBlock({|e| oError := e, Break(e)})
+    
+    Begin Sequence
+        // Use bracket notation to access property
+        xValue := oObj[cProperty]
+    Recover
+        xValue := Nil
+    End Sequence
+    
+    ErrorBlock(bOldErr)
+    
+Return xValue
+
+//=============================================================
+// HasJsonProperty - Check if property exists in JSON object
+//=============================================================
+Static Function HasJsonProperty(oObj, cProperty)
+
+    Local xValue := GetJsonValue(oObj, cProperty)
+    
+Return (xValue != Nil)
+
+//=============================================================
+// GetJsonString - Get string property or empty string
+//=============================================================
+Static Function GetJsonString(oObj, cProperty, cDefault)
+
+    Local xValue := GetJsonValue(oObj, cProperty)
+    
+    Default cDefault := ""
+    
+    If xValue == Nil .Or. ValType(xValue) != "C"
+        Return cDefault
+    EndIf
+    
+Return xValue
+
+//=============================================================
+// GetJsonNumber - Get numeric property or default value
+//=============================================================
+Static Function GetJsonNumber(oObj, cProperty, nDefault)
+
+    Local xValue := GetJsonValue(oObj, cProperty)
+    
+    Default nDefault := 0
+    
+    If xValue == Nil
+        Return nDefault
+    EndIf
+    
+    If ValType(xValue) == "N"
+        Return xValue
+    ElseIf ValType(xValue) == "C"
+        Return Val(xValue)
+    EndIf
+    
+Return nDefault
+
+//=============================================================
+// GetFieldLen - Safely get field length from SX3 dictionary
+// Returns 0 if field doesn't exist or on error
+//=============================================================
+Static Function GetFieldLen(cField)
+
+    Local aTam     := {}
+    Local nLen     := 0
+    Local oError   := Nil
+    Local bOldErr  := Nil
+    
+    If Empty(cField) .Or. ValType(cField) != "C"
+        Return 0
+    EndIf
+    
+    // Try to get field size safely
+    bOldErr := ErrorBlock({|e| oError := e, Break(e)})
+    
+    Begin Sequence
+        aTam := TamSX3(cField)
+        If ValType(aTam) == "A" .And. Len(aTam) >= 1
+            nLen := aTam[1]
+        EndIf
+    Recover
+        ConOut("[CUSTOMERS API] GetFieldLen error for field: " + cField)
+        nLen := 0
+    End Sequence
+    
+    ErrorBlock(bOldErr)
+    
+Return nLen
