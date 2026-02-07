@@ -743,8 +743,6 @@ Static Function ValidateForeignKey(oObj, cProperty, cTable, cField, aErrors)
     
 Return lValid
 
-
-
 //=============================================================
 // ArrayToStr - Convert array to delimited string
 //=============================================================
