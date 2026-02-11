@@ -153,7 +153,7 @@ User Function PE01NFESEFAZ()
     cCNPJ  := Alltrim(SA1->A1_CGC)
     cIE    := Alltrim(Iif(!Empty(SA1->A1_INSCR),SA1->A1_INSCR, "ISENTO"))
 
-    cMensCli += Chr(13) + Chr(10) + "O recebimento da(s) presente(s) mercadoria(s) autoriza que a SUNTECH SUPPLIES INDÚSTRIA E COMÉRCIO DE PRODUTOS ÓPTICOS E ESPORTIVOS LTDA, CNPJ nº 04.175.844/0001-24, receba, em seu favor, a restituição de eventuais indébitos tributários relacionados ao(s) produto(s) constante(s) da presente nota fiscal, cumprindo o disposto no art. 166 da Lei nº 5.172/1966 (CTN)." + Chr(13) + Chr(10)
+    cMensCli += Chr(13) + Chr(10) + "O recebimento da(s) presente(s) mercadoria(s) autoriza que a SUNTECH SUPPLIES INDÚSTRIA E COMÉRCIO DE PRODUTOS ÓPTICOS E ESPORTIVOS LTDA (CNPJ nº 04.175.844/0001-24 e CNPJ nº 04.175.844/0003-96) receba, em seu favor, a restituição de eventuais indébitos tributários relacionados ao(s) produto(s) constante(s) da presente nota fiscal, nos termos do art. 166 da Lei nº 5.172/1966 (CTN)." + Chr(13) + Chr(10)
 
 
     //------------------------------------------------------------------------------------
