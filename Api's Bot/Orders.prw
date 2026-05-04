@@ -30,6 +30,7 @@ WSRESTFUL Orders DESCRIPTION "Sales Order Management REST API v2.0"
 	WSMETHOD GET    DESCRIPTION "Retrieve sales orders"     WSSYNTAX "/orders"
 	WSMETHOD POST   DESCRIPTION "Create new sales order"    WSSYNTAX "/orders"
 	WSMETHOD PUT    DESCRIPTION "Update existing order"     WSSYNTAX "/orders"
+	WSMETHOD DELETE DESCRIPTION "Delete existing order"     WSSYNTAX "/orders"
 
 END WSRESTFUL
 
@@ -228,6 +229,44 @@ WSMETHOD PUT WSSERVICE Orders
 Return lRet
 
 //=============================================================
+// DELETE Method - Delete Order
+//=============================================================
+WSMETHOD DELETE WSRECEIVE orderNumber, externalId, branch WSSERVICE Orders
+
+	Local lRet       := .T.
+	Local cJson      := Self:GetContent()
+	Local oObj       := Nil
+	Local aTabs      := {}
+	Local _cEmpresa  := "01"
+	Local _cFilial   := "01"
+
+	::SetContentType("application/json")
+
+	// Try to get orderNumber/externalId from JSON body
+	oObj := JsonObject():New()
+	If oObj:FromJson(cJson) != Nil
+		// If body is empty or invalid, use query params only
+		oObj := Nil
+	EndIf
+
+	// Get branch from query parameter
+	If !Empty(Self:branch)
+		_cFilial := Self:branch
+	EndIf
+
+	// Setup Environment
+	aTabs := {"SC5", "SC6", "SA1", "SA2", "SA3", "SA4", "SB1", "SB2", "SE4", "SF4", "DA0", "DA1"}
+	RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(),aTabs)
+	cEmpAnt := _cEmpresa
+	cFilAnt := _cFilial
+	cNumEmp := _cEmpresa + _cFilial
+
+	// Delete Order
+	lRet := DeleteOrder(Self, oObj)
+
+Return lRet
+
+//=============================================================
 // GetOrderList - Retrieve paginated order list
 //=============================================================
 Static Function GetOrderList(oSelf)
@@ -253,6 +292,7 @@ Static Function GetOrderList(oSelf)
 	cQuery += "     C5.C5_CONDPAG, C5.C5_TABELA, C5.C5_TIPO, C5.C5_VEND1, C5.C5_TRANSP, "
 	cQuery += "     C5.C5_TPFRETE, C5.C5_FRETE, C5.C5_MENNOTA, C5.C5_MOEDA, C5.C5_ZZNPEXT, "
 	cQuery += "     C5.C5_ZZTPPED, C5.C5_ZZDTEMI, C5.C5_ZZORIGE, C5.C5_ZZOBS, C5.C5_ZZCUPOM, "
+	cQuery += "     C5.C5_PEDECOM, C5.C5_ZZFENTR, C5.C5_ESPECI1, "
 	cQuery += "     C5.C5_NOTA, C5.C5_SERIE, C5.C5_DESC1, "
 	cQuery += "     A1.A1_NOME, A1.A1_CGC "
 	cQuery += " FROM " + RetSqlName("SC5") + " C5 "
@@ -920,6 +960,173 @@ Static Function UpdateOrder(oSelf, oObj)
 Return lRet
 
 //=============================================================
+// DeleteOrder - Delete existing order with error handling
+//=============================================================
+Static Function DeleteOrder(oSelf, oObj)
+
+	Local lRet       := .T.
+	Local oResponse  := Nil
+	Local aDadosC5   := {}
+	Local aDadosC6   := {}
+	Local cOrderNum  := ""
+	Local cExternalId:= ""
+	Local cError     := ""
+	Local oResult    := Nil
+	Local oError     := Nil
+	Local bOldErr    := Nil
+	Local aLogAuto   := {}
+	Local cBranch    := ""
+
+	Private lMsErroAuto    := .F.
+	Private lMsHelpAuto    := .T.
+	Private lAutoErrNoFile := .T.
+	Private _lAprov        := .F.
+	Private lAlcada        := .F.
+
+	// Set up error handler
+	bOldErr := ErrorBlock({|e| oError := e, Break(e)})
+
+	Begin Sequence
+
+		// Get order identification from JSON body or query params
+		If oObj != Nil .And. ValType(oObj) $ "OJ"
+			cOrderNum   := GetJsonString(oObj, "orderNumber", "")
+			cExternalId := GetJsonString(oObj, "externalId", "")
+		EndIf
+
+		// Fallback to query parameters
+		If Empty(cOrderNum) .And. oSelf:orderNumber != Nil
+			cOrderNum := oSelf:orderNumber
+		EndIf
+		If Empty(cExternalId) .And. oSelf:externalId != Nil
+			cExternalId := oSelf:externalId
+		EndIf
+
+		If Empty(cOrderNum) .And. Empty(cExternalId)
+			oResponse := BuildResponse(.F., "orderNumber or externalId is required for delete", Nil, Nil)
+			oSelf:SetContentType("application/json")
+			oSelf:SetStatus(400)
+			oSelf:SetResponse(oResponse)
+			ErrorBlock(bOldErr)
+			Return .F.
+		EndIf
+
+		// Check if order exists
+		DbSelectArea("SC5")
+		If !Empty(cOrderNum)
+			DbSetOrder(1)
+			If !DbSeek(xFilial("SC5") + PadR(cOrderNum, TamSX3("C5_NUM")[1]))
+				oResponse := BuildResponse(.F., "Order not found", Nil, Nil)
+				oSelf:SetContentType("application/json")
+				oSelf:SetStatus(404)
+				oSelf:SetResponse(oResponse)
+				ErrorBlock(bOldErr)
+				Return .F.
+			EndIf
+		Else
+			DbSetOrder(12)
+			If !DbSeek(xFilial("SC5") + PadR(cExternalId, TamSX3("C5_ZZNPEXT")[1]))
+				oResponse := BuildResponse(.F., "Order not found", Nil, Nil)
+				oSelf:SetContentType("application/json")
+				oSelf:SetStatus(404)
+				oSelf:SetResponse(oResponse)
+				ErrorBlock(bOldErr)
+				Return .F.
+			EndIf
+			cOrderNum := SC5->C5_NUM
+		EndIf
+
+		// Check if order already has invoice (cannot delete)
+		If !Empty(AllTrim(SC5->C5_NOTA))
+			oResponse := BuildResponse(.F., "Order already invoiced, cannot delete", Nil, Nil)
+			oSelf:SetContentType("application/json")
+			oSelf:SetStatus(422)
+			oSelf:SetResponse(oResponse)
+			ErrorBlock(bOldErr)
+			Return .F.
+		EndIf
+
+		// Save order data before deletion for response
+		cExternalId := AllTrim(SC5->C5_ZZNPEXT)
+		cBranch     := AllTrim(SC5->C5_FILIAL)
+
+		// Build header array (SC5) - only C5_NUM needed for delete
+		aAdd(aDadosC5, {"C5_NUM", PadR(cOrderNum, TamSX3("C5_NUM")[1]), Nil})
+
+		// Position tables
+		PositionTables()
+
+		// Position SC5 on the order to delete
+		DbSelectArea("SC5")
+		DbSetOrder(1)
+		DbSeek(xFilial("SC5") + PadR(cOrderNum, TamSX3("C5_NUM")[1]))
+
+		// Limpa log anterior do MsExecAuto
+		If FindFunction("MsUnlockAll")
+			MsUnlockAll()
+		EndIf
+
+		// Execute MATA410 (Delete = 5)
+		ConOut("[ORDERS API] Deleting order " + AllTrim(cOrderNum) + " - Branch: " + cFilAnt)
+		lMsErroAuto := .F.
+		MsExecAuto({|w,x,y,z| MATA410(w,x,y,z)}, aDadosC5, aDadosC6, 5, .F.)
+		ConOut("[ORDERS API] MsExecAuto finished (DELETE) - lMsErroAuto: " + cValToChar(lMsErroAuto))
+
+		If lMsErroAuto
+			// Descarta transacao pendente
+			If FindFunction("DisarmTransaction")
+				DisarmTransaction()
+			EndIf
+
+			aLogAuto := GetAutoGrLog()
+			cError := ""
+			ParseAutoErrors(aLogAuto, @cError, @oResult)
+
+			If Empty(cError)
+				cError := "Erro no MsExecAuto MATA410 DELETE - Pedido: " + cOrderNum
+			EndIf
+
+			ConOut("[ORDERS API] MsExecAuto Error (DELETE): " + cError)
+			oResponse := BuildErrorResponse(cError, oResult)
+			oSelf:SetContentType("application/json")
+			oSelf:SetStatus(422)
+			oSelf:SetResponse(oResponse)
+			ErrorBlock(bOldErr)
+			Return .F.
+		EndIf
+
+		// Return deleted order data
+		oResult := JsonObject():New()
+		oResult['orderNumber'] := AllTrim(cOrderNum)
+		oResult['externalId']  := AllTrim(cExternalId)
+		oResult['branch']      := AllTrim(cBranch)
+
+		oResponse := BuildResponse(.T., "Order deleted successfully", oResult, Nil)
+		oSelf:SetContentType("application/json")
+		oSelf:SetResponse(oResponse)
+
+		Recover Using oError
+
+		cError := "Unexpected error: " + oError:Description + " at " + oError:Operation
+		If !Empty(oError:ErrorStack)
+			cError += " | Stack: " + oError:ErrorStack
+		EndIf
+
+		ConOut("[ORDERS API] Unexpected Error (DELETE): " + cError)
+
+		oResponse := BuildResponse(.F., FwNoAccent(cError), Nil, Nil)
+		oSelf:SetContentType("application/json")
+		oSelf:SetStatus(520)
+		oSelf:SetResponse(oResponse)
+		lRet := .F.
+
+	End
+
+	ErrorBlock(bOldErr)
+
+Return lRet
+
+//=============================================================
 // ValidateOrderData - Validate required fields with detailed errors
 //=============================================================
 Static Function ValidateOrderData(oObj, cError, lInsert)
@@ -1082,6 +1289,12 @@ Static Function MakeOrderHeaderArray(oObj)
 		aAdd(aData, {"C5_TRANSP", cValue, Nil})
 	EndIf
 
+	// Nature (Natureza financeira)
+	cValue := SanitizeCode(GetJsonString(oObj, "natureCode", ""), "ED_CODIGO")
+	If !Empty(cValue)
+		aAdd(aData, {"C5_NATUREZ", cValue, Nil})
+	EndIf
+
 	// Freight type (C=CIF, F=FOB)
 	cValue := Upper(AllTrim(GetJsonString(oObj, "freightType", "C")))
 	aAdd(aData, {"C5_TPFRETE", cValue, Nil})
@@ -1140,6 +1353,24 @@ Static Function MakeOrderHeaderArray(oObj)
 	cValue := SanitizeCode(GetJsonString(oObj, "couponCode", ""), "C5_ZZCUPOM")
 	If !Empty(cValue)
 		aAdd(aData, {"C5_ZZCUPOM", cValue, Nil})
+	EndIf
+
+	// Ecommerce order number
+	cValue := SanitizeCode(GetJsonString(oObj, "ecommerceOrder", ""), "C5_PEDECOM")
+	If !Empty(cValue)
+		aAdd(aData, {"C5_PEDECOM", cValue, Nil})
+	EndIf
+
+	// Freight service / delivery method
+	cValue := SanitizeString(GetJsonString(oObj, "freightService", ""), "C5_ZZFENTR", .F.)
+	If !Empty(cValue)
+		aAdd(aData, {"C5_ZZFENTR", cValue, Nil})
+	EndIf
+
+	// Package type
+	cValue := SanitizeString(GetJsonString(oObj, "packageType", ""), "C5_ESPECI1", .F.)
+	If !Empty(cValue)
+		aAdd(aData, {"C5_ESPECI1", cValue, Nil})
 	EndIf
 
 	// Financial status
@@ -1285,6 +1516,11 @@ Static Function BuildOrderHeader(cAlias)
 	oOrder['orderSubtype']     := AllTrim((cAlias)->C5_ZZTPPED)
 	oOrder['couponCode']       := AllTrim((cAlias)->C5_ZZCUPOM)
 	oOrder['observation']      := FwNoAccent(AllTrim((cAlias)->C5_ZZOBS))
+
+	// Ecommerce / Logistics
+	oOrder['ecommerceOrder']   := AllTrim((cAlias)->C5_PEDECOM)
+	oOrder['freightService']   := AllTrim((cAlias)->C5_ZZFENTR)
+	oOrder['packageType']      := AllTrim((cAlias)->C5_ESPECI1)
 
 	// Recno
 	oOrder['recno']            := IIf(lHasRecno, (cAlias)->RECNO, (cAlias)->(RecNo()))

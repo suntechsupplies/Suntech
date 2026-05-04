@@ -353,14 +353,9 @@ Static Function CreateCustomer(oSelf, oObj)
         
         // Get next code
         cCode := GetSxeNum("SA1", "A1_COD")
-        cStore := GetJsonString(oObj, "store", "01")
-        If Empty(cStore)
-            cStore := "01"
-        EndIf
         
         aAdd(aData, {"A1_FILIAL", xFilial("SA1"), Nil})
         aAdd(aData, {"A1_COD", cCode, Nil})
-        aAdd(aData, {"A1_LOJA", cStore, Nil})
         
         // Execute MATA030 (Include = 3)
         MsExecAuto({|x,y| MATA030(x,y)}, aData, 3)
@@ -379,15 +374,17 @@ Static Function CreateCustomer(oSelf, oObj)
         
         ConfirmSx8()
         
-        // Get the created record
+        // Get the created record - ERP generates A1_LOJA automatically
         DbSelectArea("SA1")
         DbSetOrder(1)
-        DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]) + PadR(cStore, TamSX3("A1_LOJA")[1]))
+        DbSeek(xFilial("SA1") + PadR(cCode, TamSX3("A1_COD")[1]))
+        
+        cStore := AllTrim(SA1->A1_LOJA)
         
         // Return created customer data
         oResult := JsonObject():New()
         oResult['code']   := AllTrim(cCode)
-        oResult['store']  := AllTrim(cStore)
+        oResult['store']  := cStore
         oResult['taxId']  := AllTrim(cTaxId)
         oResult['recno']  := SA1->(RecNo())
         
