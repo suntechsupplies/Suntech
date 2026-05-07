@@ -24,26 +24,53 @@ User Function TMKVFIM()
 	Local _aAReaSUB := SUB->(GetARea())
 	Local _aAreaSC5 := SC5->(GetARea())
 	Local _aAReaSC6 := SC6->(GetARea())
-	Local _nPosItem := aScan(aHeader,{|X|upper(alltrim(x[2]))=="UB_ITEM"})
-	Local _nPosDel  := Len(aHeader)+1
 	Local _cAtendi  := _cNumPed  := " "
-	Local cProduto := IIf(ReadVar()=="M->UA_PRODUTO",M->UA_PRODUTO,GdFieldGet("UA_PRODUTO"))
+	Local lSC5Ok    := .F.
 	//Local cFamilia := RetField("SBM",1,xFilial("SBM")+RetField("SB1",1,xFilial("SB1")+cProduto,"B1_GRUPO"),"BM_ZZFAM")
+
+	//-------------------------------------------------------------
+	// Suntech 06/05/2026 - Protecao contra SUA/SC5 desposicionados
+	// Quando o TMKA271 (Televendas) e executado via API/ExecAuto,
+	// o PE TMKVFIM pode ser disparado antes do SC5 estar gerado
+	// ou com UA_NUMSC5 vazio, gerando o erro:
+	// "Falha na tentativa de bloquear alias SC5, no registro
+	//  no final do arquivo (EOF)".
+	//-------------------------------------------------------------
+	If Select("SUA") == 0 .Or. SUA->(Eof()) .Or. SUA->(Bof()) .Or. Empty(SUA->UA_NUMSC5)
+		RestArea(_aAreaSC5)
+		RestArea(_aAreaSC6)
+		RestArea(_aAreaSUA)
+		RestArea(_aAreaSUB)
+		RestArea(_aArea)
+		Return
+	EndIf
 
 	// Gravação do Cabeçalho do Pedido de Venda
 
 	dbSelectArea("SC5")
 	dbSetOrder(1)
-	dbSeek(xFilial("SC5")+SUA->UA_NUMSC5)
+	lSC5Ok := SC5->(dbSeek(xFilial("SC5") + SUA->UA_NUMSC5))
+
+	If !lSC5Ok .Or. SC5->(Eof())
+		RestArea(_aAreaSC5)
+		RestArea(_aAreaSC6)
+		RestArea(_aAreaSUA)
+		RestArea(_aAreaSUB)
+		RestArea(_aArea)
+		Return
+	EndIf
 
 	// Localização da Transportadora
 
 	dbSelectArea("SA4")
 	dbSetOrder(1)
-	dbSeek(xFilial()+SUA->UA_TRANSP)
+	dbSeek(xFilial("SA4") + SUA->UA_TRANSP)
 
-	If Found()
-		RecLock("SC5",.F.)
+	// Suntech 06/05/2026 - Garante que o RecLock e feito no SC5
+	// posicionado, independentemente do status da SA4.
+	dbSelectArea("SC5")
+
+	If lSC5Ok .And. !SC5->(Eof()) .And. SC5->(RecLock("SC5", .F.))
 
 		SC5->C5_ZZTPPED		:= SUA->UA_ZZTPPED   // Tipo Venda HB
 		SC5->C5_NATUREZ 	:= SUA->UA_ZZNATUR   // Natureza Financeira
@@ -74,7 +101,7 @@ User Function TMKVFIM()
 		_cAtendi        := SUA->UA_NUM		//Número do Atendimento
 		_cNumPed        := SC5->C5_NUM      //Número do Pedido de Venda
 
-		MsUnlock()
+		SC5->(MsUnlock())
 
 		// Gravação do(s) item(ns) do Pedido de Vendas
 		/*

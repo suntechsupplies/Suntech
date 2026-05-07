@@ -18,25 +18,42 @@
                 inclusão, esses pedidos devem ter o campo SC5->C5_ZZTPPED == 'PE'.
 ---------------------------------------------------------------------------------------------*/
 user function M410STTS()
-	
+
 	Local _nOper 		 := PARAMIXB[1]
-	Local _cFilial		 := SC5->C5_FILIAL
-	Local _cPedido		 := SC5->C5_NUM
+	Local _cFilial		 := ""
+	Local _cPedido		 := ""
     Local aArea     	 := GetArea()
     Local aAreaC5   	 := SC5->(GetArea())
     Local aAreaC6   	 := SC6->(GetArea())
     Local aAreaC9   	 := SC9->(GetArea())
-				
+
 	/*******************************************
 	3 - Inclusão
 	4 - Alteração
 	5 - Exclusão
 	6 - Copia
 	7 - Devolução de Compras
-	/*******************************************/	
+	/*******************************************/
 
-	
-	If reclock("SC5", .F.)
+	//---------------------------------------------------------
+	// Suntech 06/05/2026 - Protecao contra SC5 em EOF/BOF
+	// Quando o TMKA271 (Televendas) chama MATA410 internamente
+	// e ocorre rollback/cleanup, o SC5 pode nao estar posicionado.
+	// O RecLock direto causava: "Falha na tentativa de bloquear
+	// alias SC5, no registro no final do arquivo (EOF)".
+	//---------------------------------------------------------
+	If Select("SC5") == 0 .Or. SC5->(Eof()) .Or. SC5->(Bof()) .Or. SC5->(Recno()) == 0
+		RestArea(aAreaC9)
+		RestArea(aAreaC6)
+		RestArea(aAreaC5)
+		RestArea(aArea)
+		Return
+	EndIf
+
+	_cFilial := SC5->C5_FILIAL
+	_cPedido := SC5->C5_NUM
+
+	If !Empty(_cPedido) .And. SC5->(RecLock("SC5", .F.))
 		SC5->C5_STATU1  := cValtoChar(_nOper) // Campo de Controle do Acacias
 		SC5->C5_ZSTATUS := cValtoChar(_nOper) // Suntech (Ricardo Araujo) - Gravar campo de controle para Integracao via API 17/01/2023
 		SC5->(MsUnlock())
