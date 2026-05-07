@@ -73,17 +73,20 @@ WSMETHOD POST WSSERVICE CallCenter
         Return .F.
     EndIf
 
-    If !Empty(Self:empresa)
-        _cEmpresa := Self:empresa
-    Else
-        _cEmpresa := CCGetStr(oObj, "empresa", _cEmpresa)
+    // JSON body tem prioridade; Self:empresa/branch (WSDATA) podem ser pre-populados
+    // pelo framework REST com o valor padrao do servidor, por isso consultamos o body primeiro
+    _cEmpresa := CCGetStr(oObj, "empresa", "")
+    If Empty(_cEmpresa)
+        _cEmpresa := IIf(ValType(Self:empresa) == "C" .And. !Empty(Self:empresa), Self:empresa, "01")
     EndIf
 
-    If !Empty(Self:branch)
-        _cFilial := Self:branch
-    Else
-        _cFilial := CCGetStr(oObj, "branch", _cFilial)
+    _cFilial := CCGetStr(oObj, "branch", "")
+    If Empty(_cFilial)
+        _cFilial := IIf(ValType(Self:branch) == "C" .And. !Empty(Self:branch), Self:branch, "01")
     EndIf
+
+    ConOut("[CALLCENTER API] POST Self:empresa=[" + cValToChar(Self:empresa) + "] Self:branch=[" + cValToChar(Self:branch) + "]")
+    ConOut("[CALLCENTER API] POST _cEmpresa=[" + _cEmpresa + "] _cFilial=[" + _cFilial + "] (antes do ResolveEnvBranch)")
 
     _cFilial := CCResolveEnvBranch(oObj, _cFilial)
 
@@ -120,17 +123,20 @@ WSMETHOD PUT WSSERVICE CallCenter
         Return .F.
     EndIf
 
-    If !Empty(Self:empresa)
-        _cEmpresa := Self:empresa
-    Else
-        _cEmpresa := CCGetStr(oObj, "empresa", _cEmpresa)
+    // JSON body tem prioridade; Self:empresa/branch (WSDATA) podem ser pre-populados
+    // pelo framework REST com o valor padrao do servidor, por isso consultamos o body primeiro
+    _cEmpresa := CCGetStr(oObj, "empresa", "")
+    If Empty(_cEmpresa)
+        _cEmpresa := IIf(ValType(Self:empresa) == "C" .And. !Empty(Self:empresa), Self:empresa, "01")
     EndIf
 
-    If !Empty(Self:branch)
-        _cFilial := Self:branch
-    Else
-        _cFilial := CCGetStr(oObj, "branch", _cFilial)
+    _cFilial := CCGetStr(oObj, "branch", "")
+    If Empty(_cFilial)
+        _cFilial := IIf(ValType(Self:branch) == "C" .And. !Empty(Self:branch), Self:branch, "01")
     EndIf
+
+    ConOut("[CALLCENTER API] PUT Self:empresa=[" + cValToChar(Self:empresa) + "] Self:branch=[" + cValToChar(Self:branch) + "]")
+    ConOut("[CALLCENTER API] PUT _cEmpresa=[" + _cEmpresa + "] _cFilial=[" + _cFilial + "] (antes do ResolveEnvBranch)")
 
     _cFilial := CCResolveEnvBranch(oObj, _cFilial)
 
@@ -165,6 +171,10 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
     PRIVATE aAutoErro      := {}   // Fix: garante existencia antes do TMKA271
     PRIVATE __cAutoHelp    := ""   // Fix: garante existencia antes do TMKA271
     PRIVATE cMSMensagem    := ""   // Fix: garante existencia antes do TMKA271
+    // GrLog persistido como PRIVATE: GetAutoGrLog em alguns cenarios so devolve
+    // o conteudo na primeira chamada, retornando vazio nas seguintes. Capturamos
+    // uma vez logo apos o ExecAuto e reusamos em CCGetAutoErr.
+    PRIVATE aCCGrLog       := {}
 
     cRotina := CCGetStr(oObj, "rotina", "")
     If Empty(cRotina) .Or. !(cRotina $ "1/2/3")
@@ -188,9 +198,26 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
         // Fix: adicionada SX5 (necessaria para validacoes internas do TMKA271,
         //       ex: MV_TMKTPTR requer tipo cadastrado no SX5)
         aTabs := {"SUA","SUB","SUC","SUD","SB1","SA1","SUS","SE4","AC8","SA4","SU7","SF4","SK1","ACF","ACG","SX5"}
-        RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(), aTabs)
 
         ConOut("[CALLCENTER API] ============================================")
+        ConOut("[CALLCENTER API] ANTES RpcSetEnv: _cEmpresa=[" + _cEmpresa + "] _cFilial=[" + _cFilial + "]")
+        ConOut("[CALLCENTER API] ANTES RpcSetEnv: cEmpAnt=[" + IIf(Type("cEmpAnt")=="C", cEmpAnt, "N/A") + "] cFilAnt=[" + IIf(Type("cFilAnt")=="C", cFilAnt, "N/A") + "]")
+
+        // Em WSRESTFUL o ambiente ja esta aberto na empresa configurada no APPSERVER.INI
+        // (geralmente "01"). Para trocar de empresa em runtime, precisamos primeiro fechar
+        // o ambiente atual com RESET ENVIRONMENT antes do RpcSetEnv.
+        // Variaveis publicas corretas no Protheus: cEmpAnt, cFilAnt.
+        If (Type("cEmpAnt") == "C" .And. !Empty(cEmpAnt) .And. cEmpAnt != _cEmpresa) .Or. ;
+           (Type("cFilAnt") == "C" .And. !Empty(cFilAnt) .And. cFilAnt != _cFilial)
+            ConOut("[CALLCENTER API] Trocando ambiente: " + ;
+                   IIf(Type("cEmpAnt")=="C", cEmpAnt, "?") + "/" + ;
+                   IIf(Type("cFilAnt")=="C", cFilAnt, "?") + " -> " + _cEmpresa + "/" + _cFilial)
+            RESET ENVIRONMENT
+        EndIf
+
+        RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(), aTabs)
+
+        ConOut("[CALLCENTER API] APOS  RpcSetEnv: cEmpAnt=[" + IIf(Type("cEmpAnt")=="C", cEmpAnt, "N/A") + "] cFilAnt=[" + IIf(Type("cFilAnt")=="C", cFilAnt, "N/A") + "]")
         ConOut("[CALLCENTER API] Empresa: " + _cEmpresa + " Filial: " + _cFilial + ;
                " Opcao: " + cValToChar(nOpcao) + " Rotina: " + cRotina)
 
@@ -233,7 +260,45 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
         MsExecAuto({|| TMKA271(aCabec, aItens, nOpcao, cRotina)}, aCabec, aItens, nOpcao, cRotina)
         ConOut("[CALLCENTER API] lMsErroAuto apos TMKA271: " + IIf(lMsErroAuto, "T", "F"))
 
-        oData := CCGetProcessData(cRotina, oObj, aCabec, aItens)
+        // Dump bruto de GetAutoGrLog para diagnostico (independente de lMsErroAuto).
+        // Protegido por sub-sequence porque em alguns cenarios GetAutoGrLog pode
+        // lancar "array out of bounds" quando o log interno do framework esta
+        // corrompido/incompleto, mascarando o erro real do TMKA271.
+        ConOut("[CALLCENTER API] --> antes GetAutoGrLog dump")
+        Begin Sequence
+            If FindFunction("GetAutoGrLog")
+                aCCGrLog := GetAutoGrLog()
+                If ValType(aCCGrLog) == "A"
+                    ConOut("[CALLCENTER API] GrLog total linhas: " + cValToChar(Len(aCCGrLog)))
+                    For nEr := 1 To Len(aCCGrLog)
+                        If ValType(aCCGrLog[nEr]) == "C"
+                            ConOut("[CALLCENTER API] GrLog[" + cValToChar(nEr) + "]=" + aCCGrLog[nEr])
+                        Else
+                            ConOut("[CALLCENTER API] GrLog[" + cValToChar(nEr) + "] tipo=" + ValType(aCCGrLog[nEr]))
+                        EndIf
+                    Next nEr
+                Else
+                    aCCGrLog := {}
+                EndIf
+            EndIf
+        Recover
+            ConOut("[CALLCENTER API] EXCECAO no GetAutoGrLog dump (ignorada)")
+            aCCGrLog := {}
+        End Sequence
+        ConOut("[CALLCENTER API] <-- apos GetAutoGrLog dump")
+
+        // CCGetProcessData tambem protegido: se TMKA271 falhou, tabelas SUA/ACF
+        // podem estar em estado inconsistente e a leitura do registro gerado
+        // parcialmente pode disparar excecao.
+        oData := Nil
+        ConOut("[CALLCENTER API] --> antes CCGetProcessData")
+        Begin Sequence
+            oData := CCGetProcessData(cRotina, oObj, aCabec, aItens)
+        Recover
+            ConOut("[CALLCENTER API] EXCECAO em CCGetProcessData (ignorada)")
+            oData := Nil
+        End Sequence
+        ConOut("[CALLCENTER API] <-- apos CCGetProcessData")
 
         If lMsErroAuto
             If FindFunction("DisarmTransaction")
@@ -261,8 +326,21 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
             EndIf
 
             cMsg := CCFormatAutoErr(CCGetAutoErr())
-            If oData != Nil
-                cMsg += " Atendimento gerado parcialmente."
+            // Soh diz "parcialmente" se houver registro fisico gravado (recno presente).
+            // CCGetProcessData pode retornar oData com dados do request mesmo quando
+            // o ExecAuto nao gravou nada.
+            // Obs: nao usar operador "$" em JsonObject (gera type mismatch). Acessamos
+            // diretamente a propriedade e verificamos se e numerica e maior que zero.
+            If oData != Nil .And. ValType(oData) == "J"
+                Begin Sequence
+                    If ValType(oData['recno']) != "N" .Or. oData['recno'] <= 0
+                        oData := Nil
+                    Else
+                        cMsg += " Atendimento gerado parcialmente."
+                    EndIf
+                Recover
+                    oData := Nil
+                End Sequence
             EndIf
             ConOut("[CALLCENTER API] Erro TMKA271: " + cMsg)
             oResponse := CCBuildResp(.F., cMsg, oData)
@@ -288,10 +366,12 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
             ConOut("[CALLCENTER API] SubCode: "    + CCGetErrInfo(oErr, "SubCode"))
         EndIf
 
-        // Se a excecao e de EOF/lock em SC5 (lancada por Pontos de Entrada como M410STTS),
-        // a causa real ja esta em aMSMensagens/aAutoErro pois lMsErroAuto foi setado
-        // pelo TMKA271 antes da excecao do PE. Priorizamos essa mensagem.
-        If ("SC5" $ cMsg .Or. "EOF" $ Upper(cMsg)) .And. lMsErroAuto
+        // Se o TMKA271 ja sinalizou erro (lMsErroAuto = .T.), a causa real esta
+        // em aMSMensagens/aAutoErro/GetAutoGrLog. Qualquer excecao posterior
+        // (ex: "array out of bounds" no GetAutoGrLog/CCGetProcessData, ou EOF/lock
+        // em SC5 lancado por Pontos de Entrada como M410STTS) e secundaria.
+        // Priorizamos sempre a mensagem real do ExecAuto.
+        If lMsErroAuto
             cMsgReal := CCFormatAutoErr(CCGetAutoErr())
             If !Empty(AllTrim(cMsgReal))
                 cMsg := cMsgReal
@@ -1441,7 +1521,11 @@ Static Function CCGetAutoErr()
     Local aLog   := {}
     Local oDummy := Nil
 
-    If FindFunction("GetAutoGrLog")
+    // Preferimos o GrLog ja capturado (PRIVATE aCCGrLog) porque GetAutoGrLog
+    // pode retornar vazio nas chamadas subsequentes a primeira.
+    If Type("aCCGrLog") == "A" .And. Len(aCCGrLog) > 0
+        aLog := aCCGrLog
+    ElseIf FindFunction("GetAutoGrLog")
         aLog := GetAutoGrLog()
     EndIf
 
@@ -1515,6 +1599,10 @@ Static Function CCParseAutoErr(aLogAuto, cError, oDetails)
     Local aErros    := {}
     Local nPos      := 0
     Local nPos2     := 0
+    Local cItemErr  := ""
+    Local cCampo    := ""
+    Local cValor    := ""
+    Local cMotivo   := ""
 
     cError := ""
     oDetails := Nil
@@ -1531,6 +1619,38 @@ Static Function CCParseAutoErr(aLogAuto, cError, oDetails)
         EndIf
 
         cLine := AllTrim(aLogAuto[nY])
+
+        // "Erro no Item N" marca inicio de bloco com campo invalido
+        If "Erro no Item" $ cLine
+            cItemErr := cLine
+            Loop
+        EndIf
+
+        // Campo marcado como invalido: "Descricao - CAMPO := VALOR < -- Invalido"
+        // Padrao do TOTVS para sinalizar valor rejeitado pelo ExecAuto.
+        If "<-- Invalido" $ StrTran(Upper(cLine), " ", "") .Or. ;
+           "<--INVALIDO"  $ StrTran(Upper(cLine), " ", "")
+            // Extrai nome do campo entre " - " e " := "
+            nPos  := At(" - ", cLine)
+            nPos2 := At(":=", cLine)
+            If nPos > 0 .And. nPos2 > nPos
+                cCampo := AllTrim(SubStr(cLine, nPos + 3, nPos2 - nPos - 3))
+                cValor := AllTrim(SubStr(cLine, nPos2 + 2))
+                // remove o sufixo "< -- Invalido" do valor
+                If At("<", cValor) > 0
+                    cValor := AllTrim(SubStr(cValor, 1, At("<", cValor) - 1))
+                EndIf
+                cMotivo := "Campo invalido: " + cCampo + " = [" + cValor + "]"
+            Else
+                cMotivo := AllTrim(cLine)
+            EndIf
+            If !Empty(cItemErr)
+                cMotivo := cItemErr + " - " + cMotivo
+                cItemErr := ""
+            EndIf
+            aAdd(aErros, cMotivo)
+            Loop
+        EndIf
 
         If Empty(cLine) .Or. Left(cLine, 5) == "-----" .Or. Left(cLine, 6) == "Tabela"
             Loop
