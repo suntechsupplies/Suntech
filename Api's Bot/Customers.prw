@@ -330,8 +330,8 @@ Static Function CreateCustomer(oSelf, oObj)
             Return .F.
         EndIf
         
-        // Get taxId using safe getter
-        cTaxId := GetJsonString(oObj, "taxId", "")
+        // Get taxId using safe getter - sanitize to match stored format in A1_CGC
+        cTaxId := SanitizeTaxId(GetJsonString(oObj, "taxId", ""))
         
         // Check if customer already exists (by CNPJ/CPF)
         DbSelectArea("SA1")

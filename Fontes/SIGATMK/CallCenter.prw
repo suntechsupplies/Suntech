@@ -6,32 +6,40 @@
 //=============================================================
 // API: CallCenter - REST API para Atendimentos do Call Center
 // Modulo: SIGATMK
-// Version: 1.2
+// Version: 2.0
 // Author: Suntech
 // Description: API REST para inclusao e alteracao de atendimentos
 //              no modulo Call Center via ExecAuto TMKA271.
 //
-// Rotinas suportadas:
-//   1 - Faturamento  (TMKA271 cRotina='2', UA_OPER='1', SUA+SUB+SC5+SC6)
-//   2 - Orcamento    (TMKA271 cRotina='2', UA_OPER='2', SUA+SUB, sem SC5/SC6)
-//   3 - Atendimento  (TMKA271 cRotina='2', UA_OPER='3', somente SUA, sem itens)
+// Rotinas suportadas (campo 'rotina' do payload):
+//   1 - Telemarketing  (TMKA271 cRotina='1', tabelas SUC/SUD)
+//       Operacao (campo 'oparation'): 1=Receptivo  2=Ativo
+//       Status   (campo 'status'):    1=Planejada  2=Pendente  3=Encerrada
 //
-// Todas as rotinas usam TMKA271 internamente com cRotina='2' (MA410).
-// O PE A410VZ deve existir no RPO para pular validacao de itens quando UA_OPER='3'.
+//   2 - Televendas     (TMKA271 cRotina='2', tabelas SUA/SUB/SC5/SC6)
+//       Operacao (campo 'oparation'): 1=Faturamento  2=Orcamento  3=Atendimento
+//       Tipo     (campo 'callType'):  1=Receptivo    2=Ativo
+//
+//   3 - Telecobranca   (TMKA271 cRotina='3', tabelas ACF/ACG/SK1)
+//       Operacao (campo 'oparation'): 1=Receptivo    2=Ativo
+//       Status   (campo 'status'):    1=Atendimento  2=Cobranca  3=Encerrado
 //
 // Metodos:
 //   POST /callcenter - Inclui atendimento  (TMKA271 opcao 3)
 //   PUT  /callcenter - Altera atendimento  (TMKA271 opcao 4)
 //
 //-------------------------------------------------------------
-// Correcoes v1.1:
-//   - Inicializacao explicita de todas as PRIVATEs do ExecAuto
-//     (lMsErroAuto, lMsHelpAuto, lAutoErrNoFile, aMSMensagens,
-//      aAutoErro, __cAutoHelp, cMSMensagem) antes de TMKA271
-//   - CCGetAutoErr captura tambem aMSMensagens
-//   - Tabela SX5 adicionada ao RpcSetEnv
-//   - isProspect tratado como booleano JSON nativo via CCGetBool
-//   - Logs expandidos para facilitar diagnostico
+// Correcoes v2.0:
+//   - Cada rotina agora usa cRotinaTMK correto (1/2/3)
+//   - Tabelas abertas por rotina (aTabs dinamico)
+//   - cAliasChk dinamico: SUC(1) / SUA(2) / ACF(3)
+//   - Nova funcao CCBuildMark para Telemarketing (SUC/SUD)
+//   - CCBuildCob (Telecobranca) agora e invocada corretamente
+//   - CCBuildVend le 'oparation' do payload -> UA_OPER
+//   - CCGetProcessData suporta SUC e ACF alem de SUA
+//   - Validacao de itens obrigatoria apenas para Televendas
+//     com oparation=1 (Faturamento) ou oparation=2 (Orcamento)
+//   - Fallback A410VZ restrito a Televendas UA_OPER=3
 //=============================================================
 
 WSRESTFUL CallCenter DESCRIPTION "Call Center Atendimento REST API v1.1"
@@ -157,6 +165,7 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
     Local aItens    := {}
     Local aTabs     := {}
     Local cMsg      := ""
+    Local cVal2     := ""
     Local oErr      := Nil
     Local bOldErr   := Nil
     Local nDbg      := 0
@@ -192,15 +201,17 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
 
     cRotina := CCGetStr(oObj, "rotina", "")
     If Empty(cRotina) .Or. !(cRotina $ "1/2/3")
-        oResponse := CCBuildResp(.F., "Campo 'rotina' obrigatorio. Valores aceitos: 1=Faturamento, 2=Orcamento, 3=Atendimento.", Nil)
+        oResponse := CCBuildResp(.F., "Campo 'rotina' obrigatorio. Valores aceitos: 1=Telemarketing, 2=Televendas, 3=Telecobranca.", Nil)
         oSelf:SetStatus(400)
         oSelf:SetResponse(oResponse)
         Return .F.
     EndIf
 
-    // Todas as rotinas usam TMKA271 cRotina='2' (MA410 -> SUA/SUB).
-    // UA_OPER diferencia o comportamento: '3'=Atendimento, '2'=Orcamento, '1'=Faturamento.
-    cRotinaTMK := "2"
+    // cRotinaTMK reflete a rotina real do TMKA271:
+    //   "1" = Telemarketing  (SUC/SUD)
+    //   "2" = Televendas     (SUA/SUB)
+    //   "3" = Telecobranca   (ACF/ACG)
+    cRotinaTMK := cRotina
 
     If ValType(CCGetObj(oObj, "cabecalho")) == "U"
         oResponse := CCBuildResp(.F., "Campo 'cabecalho' obrigatorio.", Nil)
@@ -213,9 +224,18 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
 
     Begin Sequence
 
-        // SUA/SUB para Atendimento/Orcamento/Faturamento.
-        // SC5/SC6 necessarios para Faturamento (rotina='1', UA_OPER='1').
-        aTabs := {"SUA","SUB","SB1","SA1","SUS","SU5","SU6","SE4","AC8","SA4","SU7","SF4","SK1","SC5","SC6","SX5"}
+        // Tabelas abertas por rotina:
+        //   1=Telemarketing: SUC/SUD
+        //   2=Televendas:    SUA/SUB/SC5/SC6 etc.
+        //   3=Telecobranca:  ACF/ACG/SK1
+        Do Case
+            Case cRotina == "1"
+                aTabs := {"SUC","SUD","SA1","SU7","SU6","SU5","SUS","SX5"}
+            Case cRotina == "2"
+                aTabs := {"SUA","SUB","SB1","SA1","SUS","SU5","SU6","SE4","AC8","SA4","SU7","SF4","SK1","SC5","SC6","SX5"}
+            Case cRotina == "3"
+                aTabs := {"ACF","ACG","SK1","SA1","SU7","SU6","SU5","SUS","SX5"}
+        EndCase
 
         ConOut("[CALLCENTER API] ============================================")
         ConOut("[CALLCENTER API] ANTES RpcSetEnv: _cEmpresa=[" + _cEmpresa + "] _cFilial=[" + _cFilial + "]")
@@ -241,14 +261,14 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
 
         Do Case
             Case cRotina == "1"
-                // Faturamento: UA_OPER='1' forcado, com itens, gera SC5/SC6
-                CCBuildVend(oObj, nOpcao, @aCabec, @aItens, "1")
+                // Telemarketing: UC_OPERACA define operacao, UC_STATUS define status
+                CCBuildMark(oObj, nOpcao, @aCabec, @aItens)
             Case cRotina == "2"
-                // Orcamento: UA_OPER='2' forcado, com itens, sem SC5/SC6
-                CCBuildVend(oObj, nOpcao, @aCabec, @aItens, "2")
+                // Televendas: UA_OPER vem do campo 'oparation' do payload
+                CCBuildVend(oObj, nOpcao, @aCabec, @aItens, "")
             Case cRotina == "3"
-                // Atendimento: UA_OPER='3', sem itens
-                CCBuildAtend(oObj, nOpcao, @aCabec, @aItens)
+                // Telecobranca: ACF_OPERA define operacao, ACF_STATUS define status
+                CCBuildCob(oObj, nOpcao, @aCabec, @aItens)
         EndCase
 
         ConOut("[CALLCENTER API] Campos cabecalho: " + cValToChar(Len(aCabec)))
@@ -266,32 +286,14 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
             EndIf
         Next nDbg
 
-        // Rotinas 1 e 2 (Faturamento/Orcamento) com inclusao exigem pelo menos 1 item.
-        // Rotina 3 (Atendimento) nao usa itens - A410VZ PE garante skip da validacao.
-        If nOpcao == 3 .And. (cRotina == "1" .Or. cRotina == "2") .And. Len(aItens) == 0
-            Do Case
-                Case cRotina == "1"
-                    cMsg := "Para rotina 1 (Faturamento), 'itens' nao pode ser vazio. " + ;
-                            "Informe ao menos 1 item com 'productCode', 'quantity', 'unitPrice' e 'tes'."
-                Case cRotina == "2"
-                    cMsg := "Para rotina 2 (Orcamento), 'itens' nao pode ser vazio. " + ;
-                            "Informe ao menos 1 item com 'productCode', 'quantity', 'unitPrice' e 'tes'."
-            EndCase
-            oResponse := CCBuildResp(.F., cMsg, Nil)
-            oSelf:SetStatus(400)
-            oSelf:SetResponse(oResponse)
-            ErrorBlock(bOldErr)
-            Return .F.
-        EndIf
-
-        // Garantia: rotina 3 sempre sem itens
-        If cRotina == "3"
-            ASize(aItens, 0)
-        EndIf
-
-        If cRotina == "3"
-            cMsg := CCValAtend(oObj)
-            If !Empty(cMsg)
+        // Rotinas 1 e 2 (Televendas) com inclusao exigem pelo menos 1 item quando
+        // UA_OPER = '1' (Faturamento) ou UA_OPER = '2' (Orcamento).
+        // Telemarketing (rotina=1) e Telecobranca (rotina=3) nao exigem itens de produto.
+        If nOpcao == 3 .And. cRotina == "2" .And. Len(aItens) == 0
+            cVal2 := AllTrim(CCGetAutoField(aCabec, "UA_OPER", ""))
+            If cVal2 == "1" .Or. cVal2 == "2"
+                cMsg := "Para Televendas com operacao " + IIf(cVal2=="1","1 (Faturamento)","2 (Orcamento)") + ;
+                        ", 'itens' nao pode ser vazio."
                 oResponse := CCBuildResp(.F., cMsg, Nil)
                 oSelf:SetStatus(400)
                 oSelf:SetResponse(oResponse)
@@ -300,7 +302,7 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
             EndIf
         EndIf
 
-        If cRotina == "1" .Or. cRotina == "2"
+        If cRotina == "2"
             cMsg := CCPreValidateVend(aItens)
             If !Empty(cMsg)
                 oResponse := CCBuildResp(.F., cMsg, Nil)
@@ -314,14 +316,15 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
         lMsErroAuto := .F.
 
         // Captura LastRec da tabela alvo ANTES do MsExecAuto para detectar gravacao real.
-        // Necessario porque TMKA271 em alguns cenarios retorna lMsErroAuto = .F. mesmo
-        // sem gravar nada (ex: validacao interna falha apos a primeira fase, transacao
-        // revertida silenciosamente).
-        // Todas as rotinas gravam em SUA (TMKA271 cRotina='2').
-        // IMPORTANTE: forcar a abertura/posicionamento da SUA antes de ler LastRec.
-        // Em chamadas frescas a area pode nao ter sido aberta ainda pelo RpcSetEnv
-        // (Select retorna 0 -> nRecBefore=0 -> falso positivo de gravacao).
-        cAliasChk := "SUA"
+        // Tabela alvo por rotina: 1=Telemarketing(SUC), 2=Televendas(SUA), 3=Telecobranca(ACF)
+        Do Case
+            Case cRotina == "1"
+                cAliasChk := "SUC"
+            Case cRotina == "2"
+                cAliasChk := "SUA"
+            Case cRotina == "3"
+                cAliasChk := "ACF"
+        EndCase
         DbSelectArea(cAliasChk)
         (cAliasChk)->(DbGoTop())
         nRecBefore := (cAliasChk)->(LastRec())
@@ -334,30 +337,31 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
         // Convencao MA410: ExecBlock("A410VZ") retorna .T. = validar itens, .F. = pular.
         PRIVATE lCCApiMode := .T.
 
-        // FALLBACK rotina 3 sem PE: se U_A410VZ nao esta no RPO ativo,
-        // o MA410 padrao SEMPRE aborta a inclusao do Atendimento (UA_OPER=3)
-        // por exigir itens. Nesse caso fazemos a gravacao direta na SUA,
-        // pulando MsExecAuto/TMKA271. Compatibiliza a API enquanto o PE
-        // nao foi compilado no environment.
-        If cRotina == "3" .And. nOpcao == 3 .And. !FindFunction("A410VZ")
-            ConOut("[CALLCENTER API] FALLBACK ATIVO: A410VZ ausente no RPO. Gravando SUA diretamente para rotina 3.")
-            cMsg := CCDirectInsertSUA(aCabec, @oData, cRotina)
-            lCCApiMode := .F.
-            If Empty(cMsg)
-                ConOut("[CALLCENTER API] FALLBACK: Atendimento incluido com sucesso (recno=" + ;
-                       cValToChar(IIf(oData != Nil .And. ValType(oData) == "J", oData['recno'], 0)) + ")")
-                oResponse := CCBuildResp(.T., "Atendimento incluido com sucesso.", oData)
-                oSelf:SetStatus(200)
-                ErrorBlock(bOldErr)
-                oSelf:SetResponse(oResponse)
-                Return .T.
-            Else
-                ConOut("[CALLCENTER API] FALLBACK FALHOU: " + cMsg)
-                oResponse := CCBuildResp(.F., cMsg, Nil)
-                oSelf:SetStatus(422)
-                ErrorBlock(bOldErr)
-                oSelf:SetResponse(oResponse)
-                Return .F.
+        // FALLBACK Televendas Atendimento (UA_OPER=3) sem PE A410VZ:
+        // Somente para rotina=2 com UA_OPER=3 (Atendimento puro, sem itens).
+        // Para rotinas 1 e 3 (Telemarketing/Telecobranca) nao existe esse fallback.
+        If cRotina == "2" .And. nOpcao == 3 .And. !FindFunction("A410VZ")
+            cVal2 := AllTrim(CCGetAutoField(aCabec, "UA_OPER", ""))
+            If cVal2 == "3"
+                ConOut("[CALLCENTER API] FALLBACK ATIVO: A410VZ ausente no RPO. Gravando SUA diretamente para UA_OPER=3.")
+                cMsg := CCDirectInsertSUA(aCabec, @oData, cRotina)
+                lCCApiMode := .F.
+                If Empty(cMsg)
+                    ConOut("[CALLCENTER API] FALLBACK: Atendimento incluido com sucesso (recno=" + ;
+                           cValToChar(IIf(oData != Nil .And. ValType(oData) == "J", oData['recno'], 0)) + ")")
+                    oResponse := CCBuildResp(.T., "Atendimento incluido com sucesso.", oData)
+                    oSelf:SetStatus(200)
+                    ErrorBlock(bOldErr)
+                    oSelf:SetResponse(oResponse)
+                    Return .T.
+                Else
+                    ConOut("[CALLCENTER API] FALLBACK FALHOU: " + cMsg)
+                    oResponse := CCBuildResp(.F., cMsg, Nil)
+                    oSelf:SetStatus(422)
+                    ErrorBlock(bOldErr)
+                    oSelf:SetResponse(oResponse)
+                    Return .F.
+                EndIf
             EndIf
         EndIf
 
@@ -416,20 +420,21 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
         End Sequence
         ConOut("[CALLCENTER API] <-- apos CCGetProcessData")
 
-        // Fallback rotina 3 (Atendimento): quando o U_A410VZ customizado nao esta
-        // carregado no RPO, o MA410 padrao dispara "AJUDA:A410VZ - Os campos
-        // Quantidade, Preco de Venda, preco unitario ou TES estao em Branco" mesmo
-        // para UA_OPER=3 (que nao tem itens). Se o registro SUA foi gravado
-        // (lGravou=T), trate como SUCESSO ja que Atendimento nao precisa de itens.
-        If lMsErroAuto .And. cRotina == "3" .And. lGravou
+        // Fallback Televendas UA_OPER=3 (Atendimento): quando o U_A410VZ customizado nao esta
+        // carregado no RPO, o MA410 padrao dispara erro de itens em branco mesmo para UA_OPER=3.
+        // Se o registro SUA foi gravado (lGravou=T), trate como SUCESSO.
+        If lMsErroAuto .And. cRotina == "2" .And. lGravou
             Begin Sequence
-                cMsgReal := Upper(CCFormatAutoErr(CCGetAutoErr()))
-                If "A410VZ" $ cMsgReal .Or. "INCONSISTENCIA NOS ITENS" $ cMsgReal .Or. ;
-                   ("QUANTIDADE" $ cMsgReal .And. "BRANCO" $ cMsgReal)
-                    ConOut("[CALLCENTER API] Rotina 3 + gravou=T + erro A410VZ ignorado (Atendimento nao requer itens).")
-                    lMsErroAuto := .F.
+                cVal2 := AllTrim(CCGetAutoField(aCabec, "UA_OPER", ""))
+                If cVal2 == "3"
+                    cMsgReal := Upper(CCFormatAutoErr(CCGetAutoErr()))
+                    If "A410VZ" $ cMsgReal .Or. "INCONSISTENCIA NOS ITENS" $ cMsgReal .Or. ;
+                       ("QUANTIDADE" $ cMsgReal .And. "BRANCO" $ cMsgReal)
+                        ConOut("[CALLCENTER API] Rotina 2/UA_OPER=3 + gravou=T + erro A410VZ ignorado.")
+                        lMsErroAuto := .F.
+                    EndIf
+                    cMsgReal := ""
                 EndIf
-                cMsgReal := ""
             Recover
                 cMsgReal := ""
             End Sequence
@@ -472,9 +477,20 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
             // Caso a deteccao de falso positivo via LastRec tenha forcado o erro
             // (sem mensagens reais do auto-erro), informa um diagnostico claro.
             If Empty(AllTrim(cMsg)) .And. !lGravou
-                cMsg := "TMKA271 nao gravou registro em " + cAliasChk + " (rotina API=" + cRotina + "). " + ;
-                        "Verifique campos obrigatorios: entidade (UC_ENTIDAD/UC_CHAVE), operador (UC_OPERADO), " + ;
-                        "ligacao (UC_CODLIG). Para rotina 2: produto (UB_PRODUTO), TES (UB_TES), quantidade."
+                Do Case
+                    Case cRotina == "1"
+                        cMsg := "TMKA271 nao gravou registro em SUC (Telemarketing). " + ;
+                                "Verifique campos obrigatorios: cliente (UC_CLIENT), operador (UC_OPERAD), " + ;
+                                "operacao (UC_OPERACA)."
+                    Case cRotina == "2"
+                        cMsg := "TMKA271 nao gravou registro em SUA (Televendas). " + ;
+                                "Verifique campos obrigatorios: cliente (UA_CLIENTE), operador (UA_OPERADO), " + ;
+                                "ligacao (UA_CODLIG). Para oparation=1/2: produto (UB_PRODUTO), TES (UB_TES), quantidade."
+                    Case cRotina == "3"
+                        cMsg := "TMKA271 nao gravou registro em ACF (Telecobranca). " + ;
+                                "Verifique campos obrigatorios: cliente (ACF_CLIENT), operador (ACF_OPERAD), " + ;
+                                "operacao (ACF_OPERA)."
+                EndCase
             EndIf
             // Quando nao houve gravacao real (lGravou=F), qualquer oData obtido via
             // fallback do CCGetProcessData aponta para registro EXISTENTE anterior,
@@ -565,37 +581,17 @@ Static Function CCGetProcessData(cRotina, oObj, aCabec, aItens)
     cCodLig := CCGetStr(oCab, "callCode", "")
 
     Begin Sequence
-        // Todas as rotinas (1=Atendimento, 2=Orcamento, 3=Faturamento) gravam em SUA.
-        If Select("SUA") > 0
-            cNumAuto := CCGetAutoField(aCabec, "UA_NUM", "")
-            ConOut("[CALLCENTER API] CCGetProcessData rotina=[" + cRotina + "] SUA cNumAuto=[" + cNumAuto + "]")
+        Do Case
+        Case cRotina == "2"
+            // Televendas: grava em SUA
+            If Select("SUA") > 0
+                cNumAuto := CCGetAutoField(aCabec, "UA_NUM", "")
+                ConOut("[CALLCENTER API] CCGetProcessData rotina=[" + cRotina + "] SUA cNumAuto=[" + cNumAuto + "]")
 
-            dbSelectArea("SUA")
-            SUA->(dbSetOrder(1))
+                dbSelectArea("SUA")
+                SUA->(dbSetOrder(1))
 
-            If !Empty(cNumAuto) .And. SUA->(dbSeek(xFilial("SUA") + PadR(cNumAuto, TamSX3("UA_NUM")[1])))
-                oData := JsonObject():New()
-                oData['routine']          := cRotina
-                oData['recno']            := SUA->(Recno())
-                oData['attendanceNumber'] := AllTrim(SUA->UA_NUM)
-                oData['salesOrderNumber'] := AllTrim(SUA->UA_NUMSC5)
-                oData['customerCode']     := AllTrim(SUA->UA_CLIENTE)
-                oData['customerStore']    := AllTrim(SUA->UA_LOJA)
-                oData['operatorCode']     := AllTrim(SUA->UA_OPERADO)
-                oData['attendanceType']   := AllTrim(SUA->UA_OPER)
-            Else
-                // Fallback: busca pelo ultimo registro do cliente/operador/ligacao
-                SUA->(dbGoBottom())
-                While !SUA->(Bof())
-                    If (Empty(cCli)   .Or. AllTrim(SUA->UA_CLIENTE) == cCli)   .And. ;
-                       (Empty(cLoja)  .Or. AllTrim(SUA->UA_LOJA)    == cLoja)  .And. ;
-                       (Empty(cOper)  .Or. AllTrim(SUA->UA_OPERADO) == cOper)  .And. ;
-                       (Empty(cCodLig).Or. AllTrim(SUA->UA_CODLIG)  == cCodLig)
-                        Exit
-                    EndIf
-                    SUA->(dbSkip(-1))
-                EndDo
-                If !SUA->(Bof()) .And. !SUA->(Eof())
+                If !Empty(cNumAuto) .And. SUA->(dbSeek(xFilial("SUA") + PadR(cNumAuto, TamSX3("UA_NUM")[1])))
                     oData := JsonObject():New()
                     oData['routine']          := cRotina
                     oData['recno']            := SUA->(Recno())
@@ -604,10 +600,111 @@ Static Function CCGetProcessData(cRotina, oObj, aCabec, aItens)
                     oData['customerCode']     := AllTrim(SUA->UA_CLIENTE)
                     oData['customerStore']    := AllTrim(SUA->UA_LOJA)
                     oData['operatorCode']     := AllTrim(SUA->UA_OPERADO)
-                    oData['attendanceType']   := AllTrim(SUA->UA_OPER)
+                    oData['operation']        := AllTrim(SUA->UA_OPER)
+                    oData['callType']         := AllTrim(SUA->UA_TMK)
+                Else
+                    SUA->(dbGoBottom())
+                    While !SUA->(Bof())
+                        If (Empty(cCli)   .Or. AllTrim(SUA->UA_CLIENTE) == cCli)   .And. ;
+                           (Empty(cLoja)  .Or. AllTrim(SUA->UA_LOJA)    == cLoja)  .And. ;
+                           (Empty(cOper)  .Or. AllTrim(SUA->UA_OPERADO) == cOper)  .And. ;
+                           (Empty(cCodLig).Or. AllTrim(SUA->UA_CODLIG)  == cCodLig)
+                            Exit
+                        EndIf
+                        SUA->(dbSkip(-1))
+                    EndDo
+                    If !SUA->(Bof()) .And. !SUA->(Eof())
+                        oData := JsonObject():New()
+                        oData['routine']          := cRotina
+                        oData['recno']            := SUA->(Recno())
+                        oData['attendanceNumber'] := AllTrim(SUA->UA_NUM)
+                        oData['salesOrderNumber'] := AllTrim(SUA->UA_NUMSC5)
+                        oData['customerCode']     := AllTrim(SUA->UA_CLIENTE)
+                        oData['customerStore']    := AllTrim(SUA->UA_LOJA)
+                        oData['operatorCode']     := AllTrim(SUA->UA_OPERADO)
+                        oData['operation']        := AllTrim(SUA->UA_OPER)
+                        oData['callType']         := AllTrim(SUA->UA_TMK)
+                    EndIf
                 EndIf
             EndIf
-        EndIf
+
+        Case cRotina == "1"
+            // Telemarketing: grava em SUC
+            If Select("SUC") > 0
+                cNumAuto := CCGetAutoField(aCabec, "UC_CODIGO", "")
+                ConOut("[CALLCENTER API] CCGetProcessData rotina=[" + cRotina + "] SUC cNumAuto=[" + cNumAuto + "]")
+
+                dbSelectArea("SUC")
+                SUC->(dbSetOrder(1))
+
+                If !Empty(cNumAuto) .And. SUC->(dbSeek(xFilial("SUC") + PadR(cNumAuto, TamSX3("UC_CODIGO")[1])))
+                    oData := JsonObject():New()
+                    oData['routine']      := cRotina
+                    oData['recno']        := SUC->(Recno())
+                    oData['attendanceCode'] := AllTrim(SUC->UC_CODIGO)
+                    oData['customerCode'] := AllTrim(SUC->UC_CLIENT)
+                    oData['customerStore']:= AllTrim(SUC->UC_LOJA)
+                    oData['operatorCode'] := AllTrim(SUC->UC_OPERAD)
+                    oData['operation']    := AllTrim(SUC->UC_OPERACA)
+                    oData['status']       := AllTrim(SUC->UC_STATUS)
+                Else
+                    SUC->(dbGoBottom())
+                    If !SUC->(Bof()) .And. !SUC->(Eof())
+                        If (Empty(cCli) .Or. AllTrim(SUC->UC_CLIENT) == cCli) .And. ;
+                           (Empty(cOper) .Or. AllTrim(SUC->UC_OPERAD) == cOper)
+                            oData := JsonObject():New()
+                            oData['routine']        := cRotina
+                            oData['recno']          := SUC->(Recno())
+                            oData['attendanceCode'] := AllTrim(SUC->UC_CODIGO)
+                            oData['customerCode']   := AllTrim(SUC->UC_CLIENT)
+                            oData['customerStore']  := AllTrim(SUC->UC_LOJA)
+                            oData['operatorCode']   := AllTrim(SUC->UC_OPERAD)
+                            oData['operation']      := AllTrim(SUC->UC_OPERACA)
+                            oData['status']         := AllTrim(SUC->UC_STATUS)
+                        EndIf
+                    EndIf
+                EndIf
+            EndIf
+
+        Case cRotina == "3"
+            // Telecobranca: grava em ACF
+            If Select("ACF") > 0
+                cNumAuto := CCGetAutoField(aCabec, "ACF_CODIGO", "")
+                ConOut("[CALLCENTER API] CCGetProcessData rotina=[" + cRotina + "] ACF cNumAuto=[" + cNumAuto + "]")
+
+                dbSelectArea("ACF")
+                ACF->(dbSetOrder(1))
+
+                If !Empty(cNumAuto) .And. ACF->(dbSeek(xFilial("ACF") + PadR(cNumAuto, TamSX3("ACF_CODIGO")[1])))
+                    oData := JsonObject():New()
+                    oData['routine']        := cRotina
+                    oData['recno']          := ACF->(Recno())
+                    oData['attendanceCode'] := AllTrim(ACF->ACF_CODIGO)
+                    oData['customerCode']   := AllTrim(ACF->ACF_CLIENT)
+                    oData['customerStore']  := AllTrim(ACF->ACF_LOJA)
+                    oData['operatorCode']   := AllTrim(ACF->ACF_OPERAD)
+                    oData['operation']      := AllTrim(ACF->ACF_OPERA)
+                    oData['status']         := AllTrim(ACF->ACF_STATUS)
+                Else
+                    ACF->(dbGoBottom())
+                    If !ACF->(Bof()) .And. !ACF->(Eof())
+                        If (Empty(cCli) .Or. AllTrim(ACF->ACF_CLIENT) == cCli) .And. ;
+                           (Empty(cOper) .Or. AllTrim(ACF->ACF_OPERAD) == cOper)
+                            oData := JsonObject():New()
+                            oData['routine']        := cRotina
+                            oData['recno']          := ACF->(Recno())
+                            oData['attendanceCode'] := AllTrim(ACF->ACF_CODIGO)
+                            oData['customerCode']   := AllTrim(ACF->ACF_CLIENT)
+                            oData['customerStore']  := AllTrim(ACF->ACF_LOJA)
+                            oData['operatorCode']   := AllTrim(ACF->ACF_OPERAD)
+                            oData['operation']      := AllTrim(ACF->ACF_OPERA)
+                            oData['status']         := AllTrim(ACF->ACF_STATUS)
+                        EndIf
+                    EndIf
+                EndIf
+            EndIf
+
+        EndCase
     Recover
         oData := Nil
     End Sequence
@@ -865,11 +962,217 @@ Return ""
 //-------------------------------------------------------------
 // CCBuildAtend - Monta arrays para Teleatendimento (rotina=1)
 //-------------------------------------------------------------
-// CCBuildAtend - Monta arrays para Atendimento (rotina API=1)
+// CCBuildMark - Monta arrays para Telemarketing (rotina=1)
 //
-// UA_OPER='3' = Atendimento puro (sem pedido, sem itens SUB).
+// Tabelas: SUC (cabecalho), SUD (itens/ocorrencias)
+// cRotinaTMK = "1" no TMKA271
+// UC_OPERACA: 1=Receptivo 2=Ativo
+// UC_STATUS:  1=Planejada 2=Pendente 3=Encerrada
+//-------------------------------------------------------------
+Static Function CCBuildMark(oObj, nOpcao, aCabec, aItens)
+
+    Local oCab   := CCGetObj(oObj, "cabecalho")
+    Local aIt    := CCGetArr(oObj, "itens")
+    Local aLinha := {}
+    Local oItem  := Nil
+    Local nI     := 0
+    Local cVal   := ""
+    Local dPend  := CToD("")
+
+    If nOpcao == 4
+        cVal := CCGetStr(oCab, "attendanceCode", "")
+        If !Empty(cVal)
+            CCAddField(aCabec, "UC_CODIGO", cVal)
+        EndIf
+    EndIf
+
+    cVal := CCGetStr(oCab, "customerCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_CLIENT", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "customerStore", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_LOJA", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "operatorCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_OPERAD", cVal)
+    EndIf
+
+    // UC_OPERACA: 1=Receptivo 2=Ativo (campo 'oparation' do payload)
+    cVal := CCGetStr(oCab, "oparation", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_OPERACA", cVal)
+    EndIf
+
+    // UC_STATUS: 1=Planejada 2=Pendente 3=Encerrada (campo 'status' do payload)
+    cVal := CCGetStr(oCab, "status", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_STATUS", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "callCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_CODLIG", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "contactCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_CODCON", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "attendanceDate", "")
+    If !Empty(cVal)
+        If Len(AllTrim(cVal)) == 8 .And. IsDigit(SubStr(cVal, 1, 1))
+            CCAddField(aCabec, "UC_EMISSAO", SToD(cVal))
+        Else
+            CCAddField(aCabec, "UC_EMISSAO", CToD(cVal))
+        EndIf
+    Else
+        CCAddField(aCabec, "UC_EMISSAO", dDataBase)
+    EndIf
+
+    cVal := CCGetStr(oCab, "processStatusCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_ZZSTATU", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "responseCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_ZZRESP", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "responseName", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_ZZNRESP", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "observation", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_OBS", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "returnDate", "")
+    If !Empty(cVal)
+        If Len(AllTrim(cVal)) == 8 .And. IsDigit(SubStr(cVal, 1, 1))
+            dPend := SToD(cVal)
+        Else
+            dPend := CToD(cVal)
+        EndIf
+        If dPend != CToD("")
+            CCAddField(aCabec, "UC_DTPEND", dPend)
+        EndIf
+    EndIf
+
+    // Enderecos de entrega
+    cVal := CCGetStr(oCab, "deliveryAddress", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_ENDENT", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "deliveryComplement", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_COMPE", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "deliveryNeighborhood", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_BAIRROE", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "deliveryCity", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_MUNE", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "deliveryState", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_ESTE", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "deliveryZipCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_CEPE", cVal)
+    EndIf
+
+    // Enderecos de cobranca
+    cVal := CCGetStr(oCab, "billingAddress", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_ENDCOB", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "billingComplement", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_COMPC", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "billingNeighborhood", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_BAIRROC", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "billingCity", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_MUNC", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "billingState", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_ESTC", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "billingZipCode", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UC_CEPC", cVal)
+    EndIf
+
+    // Itens do Telemarketing (SUD): ocorrencias/atividades
+    ASize(aItens, 0)
+    For nI := 1 To Len(aIt)
+        oItem  := aIt[nI]
+        aLinha := {}
+
+        If nOpcao == 4
+            cVal := CCGetStr(oItem, "deleteItem", "")
+            If !Empty(cVal)
+                AADD(aLinha, {"AUTDELETA", cVal, Nil})
+            EndIf
+        EndIf
+
+        cVal := CCGetStr(oItem, "occurrenceCode", "")
+        If !Empty(cVal)
+            CCAddField(aLinha, "UD_CODOCOR", cVal)
+        EndIf
+
+        cVal := CCGetStr(oItem, "occurrenceDate", "")
+        If !Empty(cVal)
+            If Len(AllTrim(cVal)) == 8 .And. IsDigit(SubStr(cVal, 1, 1))
+                CCAddField(aLinha, "UD_DTOCOR", SToD(cVal))
+            Else
+                CCAddField(aLinha, "UD_DTOCOR", CToD(cVal))
+            EndIf
+        EndIf
+
+        cVal := CCGetStr(oItem, "observation", "")
+        If !Empty(cVal)
+            CCAddField(aLinha, "UD_OBS", cVal)
+        EndIf
+
+        If Len(aLinha) > 0
+            AADD(aItens, aLinha)
+        EndIf
+    Next nI
+
+Return Nil
+
+//-------------------------------------------------------------
+// CCBuildAtend - Monta arrays para Atendimento puro (Televendas UA_OPER=3)
+//
+// UA_OPER='3' fixo para Atendimento (nao gera pedido SC5/SC6).
 // TMKA271 cRotina='2' -> MA410 -> SUA.
-// PE A410VZ deve retornar .T. quando UA_OPER='3'.
+// PE A410VZ deve retornar .F. quando UA_OPER='3'.
 //-------------------------------------------------------------
 Static Function CCBuildAtend(oObj, nOpcao, aCabec, aItens)
 
@@ -1019,9 +1322,15 @@ Static Function CCBuildAtend(oObj, nOpcao, aCabec, aItens)
 Return Nil
 
 //-------------------------------------------------------------
-// CCBuildVend - Monta arrays para Orcamento (rotina=2) e Faturamento (rotina=3)
+// CCBuildVend - Monta arrays para Televendas (rotina=2)
 //
-// cForceOper: '2'=Orcamento (sem SC5/SC6), '1'=Faturamento (gera SC5/SC6)
+// UA_OPER (campo 'oparation' do payload):
+//   1=Faturamento (gera SC5/SC6)
+//   2=Orcamento   (sem SC5/SC6)
+//   3=Atendimento (sem itens SUB)
+// UA_TMK (campo 'callType' do payload):
+//   1=Receptivo  2=Ativo
+// cForceOper: quando vazio, usa 'oparation' do payload.
 //-------------------------------------------------------------
 Static Function CCBuildVend(oObj, nOpcao, aCabec, aItens, cForceOper)
 
@@ -1059,12 +1368,16 @@ Static Function CCBuildVend(oObj, nOpcao, aCabec, aItens, cForceOper)
         CCAddField(aCabec, "UA_OPERADO", cVal)
     EndIf
 
-    // UA_OPER: forcado pelo parametro cForceOper (rotina API define o tipo)
-    // '1'=Faturamento (gera SC5/SC6), '2'=Orcamento (sem SC5/SC6), '3'=Atendimento
+    // UA_OPER: 1=Faturamento, 2=Orcamento, 3=Atendimento
+    // Usa cForceOper quando fornecido; caso contrario le 'oparation' do payload.
     If !Empty(cForceOper)
         CCAddField(aCabec, "UA_OPER", cForceOper)
     Else
-        cVal := CCGetStr(oCab, "attendanceType", "")
+        cVal := CCGetStr(oCab, "oparation", "")
+        If Empty(cVal)
+            // fallback: aceita 'attendanceType' para compatibilidade
+            cVal := CCGetStr(oCab, "attendanceType", "")
+        EndIf
         If !Empty(cVal)
             CCAddField(aCabec, "UA_OPER", cVal)
         EndIf

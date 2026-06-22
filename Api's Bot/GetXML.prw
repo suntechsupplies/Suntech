@@ -79,6 +79,18 @@ WSMETHOD POST WSSERVICE GetXmlNf
 	cFilAnt := _cFilial
 	cNumEmp := _cEmpresa + _cFilial
 
+	// Abertura explicita de SF2: em contextos REST o parametro aTabs do
+	// RpcSetEnv pode nao efetivar a abertura do alias no Select(). Sem
+	// Select("SF2") > 0, funcoes auxiliares compiladas no RPO retornam
+	// "Alias SF2 nao esta aberto no ambiente" com status 422.
+	If Select("SF2") <= 0
+		Begin Sequence
+			DbUseArea(.T., "TOPCONN", RetSqlName("SF2"), "SF2", .F., .F.)
+		Recover
+			ConOut("[GETXML] AVISO: nao foi possivel abrir SF2 via DbUseArea")
+		End Sequence
+	EndIf
+
 	// Obter idEnt apos RpcSetEnv para ter contexto correto
 	_cIdEnt := IIf(ValType(oReq['idEnt']) == 'U', SuperGetMv("UF_ENTTSS", .F., , _cFilial), AllTrim(cValToChar(oReq['idEnt'])))
 
@@ -204,12 +216,15 @@ Static Function _GetXmlFromTss(nRecnoSF2, cIdEnt, cXml, cRet)
 	Local cQrySf2   := ""
 	Local cF2Serie  := ""
 	Local cF2Doc    := ""
+	Local cNfeId    := ""
 
 	cXml := ""
 	cRet := ""
 
 	// Busca F2_SERIE e F2_DOC via SQL para nao depender de area aberta
 	cQrySf2 := "SELECT F2_SERIE, F2_DOC FROM " + RetSqlName("SF2") + " WHERE R_E_C_N_O_ = " + cValToChar(nRecnoSF2)
+
+	ConOut("[GETXML][TSS] Buscando serie/doc para recno " + cValToChar(nRecnoSF2) + " na tabela " + RetSqlName("SF2"))
 
 	If Select(cAliasSf2) > 0
 		(cAliasSf2)->(DbCloseArea())
@@ -219,15 +234,25 @@ Static Function _GetXmlFromTss(nRecnoSF2, cIdEnt, cXml, cRet)
 
 	If (cAliasSf2)->(Eof())
 		(cAliasSf2)->(DbCloseArea())
-		cRet := "NF nao localizada"
+		cRet := "NF nao localizada na SF2 por recno " + cValToChar(nRecnoSF2)
+		ConOut("[GETXML][TSS] ERRO: " + cRet)
 		Return .F.
 	EndIf
 
 	cF2Serie := AllTrim((cAliasSf2)->F2_SERIE)
 	cF2Doc   := AllTrim((cAliasSf2)->F2_DOC)
+
+	// Usa F2_SERIE + F2_DOC COM padding (sem AllTrim), igual a UF_GERXML.prw:
+	//   SF2->(F2_SERIE + F2_DOC) => ex.: "1  000194193" (3+9 chars)
+	// O TSS identifica a NF por esse formato exato.
+	cNfeId := (cAliasSf2)->F2_SERIE + (cAliasSf2)->F2_DOC
+
 	(cAliasSf2)->(DbCloseArea())
 
-	// TSS WebService payload for one NF identified by serie+documento.
+	ConOut("[GETXML][TSS] Serie=[" + cF2Serie + "] Doc=[" + cF2Doc + "] ID TSS=[" + cNfeId + "]")
+	ConOut("[GETXML][TSS] URL=" + AllTrim(cUrlTss) + UF_GERXML_TSS_PATH + " Entidade=[" + cIdEnt + "]")
+
+	// TSS WebService payload for one NF identified by access key or serie+doc.
 	oTss := WSNFeSBRA():New()
 	oTss:cUSERTOKEN        := "TOTVS"
 	oTss:cID_ENT           := cIdEnt
@@ -235,17 +260,23 @@ Static Function _GetXmlFromTss(nRecnoSF2, cIdEnt, cXml, cRet)
 	oTss:oWSNFEID:oWSNotas := NFESBRA_ARRAYOFNFESID2():New()
 	aAdd(oTss:oWSNFEID:oWSNotas:oWSNFESID2, NFESBRA_NFESID2():New())
 	oNfeId := aTail(oTss:oWSNFEID:oWSNotas:oWSNFESID2)
-	oNfeId:cID := cF2Serie + cF2Doc
+	oNfeId:cID := cNfeId
 	oTss:nDIASPARAEXCLUSAO := 0
 	oTss:_URL              := AllTrim(cUrlTss) + UF_GERXML_TSS_PATH
 
+	ConOut("[GETXML][TSS] Chamando RetornaNotas...")
+
 	If !oTss:RetornaNotas()
 		cRet := IIf(Empty(GetWscError(3)), GetWscError(1), GetWscError(3))
+		ConOut("[GETXML][TSS] ERRO RetornaNotas: " + cRet)
 		Return .F.
 	EndIf
 
+	ConOut("[GETXML][TSS] RetornaNotas OK. Notas retornadas: " + cValToChar(Len(oTss:oWsRetornaNotasResult:OWSNOTAS:oWSNFES3)))
+
 	If Len(oTss:oWsRetornaNotasResult:OWSNOTAS:oWSNFES3) <= 0
-		cRet := "NF nao localizada"
+		cRet := "NF nao localizada no TSS (ID: " + cNfeId + "). Verifique se a NF foi emitida via TSS e a entidade [" + cIdEnt + "]"
+		ConOut("[GETXML][TSS] ERRO: " + cRet)
 		Return .F.
 	EndIf
 
