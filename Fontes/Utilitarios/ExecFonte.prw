@@ -48,32 +48,82 @@ Return
  
 Static Function fExecuta()
     Local aArea    := GetArea()
-    Local cFormula := Alltrim(cGetForm)
+    Local cFormula := AllTrim(cGetForm)
+    Local cFuncao  := ""
+    Local cArgs    := "()"
+    Local nAbre    := 0
+    Local nCaract  := 0
+    Local xRetorno := Nil
     Local cError   := ""
-    Local bError   := ErrorBlock({ |oError| cError := oError:Description})
+    Local bError   := Nil
+    Local oExecError := Nil
      
     //Se tiver conteúdo digitado
     If ! Empty(cFormula)
 
-        //Caso o usuário digite o U_ ou () no nome do fonte, retira esses caracteres
-        cFormula := StrTran( cFormula , "U_" , "" )
-        cFormula := StrTran( cFormula , "()" , "" )
-
-        //Valida se o fonte existe no rpo
-        aFonte := GETAPOINFO( cFormula + ".prw" )
-
-        //Valida se retornou os dados do fonte do rpo
-        If !Len( aFonte )
-            MsgAlert( DECODEUTF8( "Fonte não encontrado no RPO" ) , "ops!" )
-            Return u_ExecFonte()
+        nAbre := At("(", cFormula)
+        If nAbre > 0
+            cFuncao := Upper(AllTrim(Left(cFormula, nAbre - 1)))
+            cArgs := SubStr(cFormula, nAbre)
+            If Right(cArgs, 1) != ")"
+                MsgAlert("Chamada invalida: feche os parenteses da funcao.", "ExecFonte")
+                RestArea(aArea)
+                Return
+            EndIf
+        Else
+            cFuncao := Upper(cFormula)
         EndIf
 
-        //complementa a variavel e executa macro substituição chamando a rotina
-        cFormula := "U_"+cFormula+"()"
+        If Empty(cFuncao)
+            MsgAlert("Informe o nome da funcao.", "ExecFonte")
+            RestArea(aArea)
+            Return
+        EndIf
+        For nCaract := 1 To Len(cFuncao)
+            If !(SubStr(cFuncao, nCaract, 1) $ "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+                MsgAlert("Nome de funcao invalido: " + cFuncao, "ExecFonte")
+                RestArea(aArea)
+                Return
+            EndIf
+        Next nCaract
+        If Left(cFuncao, 2) != "U_"
+            cFuncao := "U_" + cFuncao
+        EndIf
+
+        If !FindFunction(cFuncao)
+            MsgAlert("Funcao nao encontrada no RPO: " + cFuncao, "ExecFonte")
+            RestArea(aArea)
+            Return
+        EndIf
+
+        cFormula := cFuncao + cArgs
+        bError := ErrorBlock({|oError| Break(oError)})
 
         //Inicio a utilização da tentativa
         Begin Sequence
-            &(cFormula)
+            xRetorno := &(cFormula)
+            If ValType(xRetorno) == "L"
+                If !xRetorno
+                    cError := "A funcao retornou .F.; confira o resultado da operacao."
+                EndIf
+            ElseIf ValType(xRetorno) == "A"
+                If Len(xRetorno) >= 2
+                    If ValType(xRetorno[1]) == "L" .And. ValType(xRetorno[2]) == "C"
+                        If !xRetorno[1]
+                            cError := xRetorno[2]
+                            If Empty(cError)
+                                cError := "A funcao informou falha sem mensagem."
+                            EndIf
+                        EndIf
+                    EndIf
+                EndIf
+            EndIf
+        Recover Using oExecError
+            If ValType(oExecError) == "O"
+                cError := cValToChar(oExecError:Description)
+            Else
+                cError := cValToChar(oExecError)
+            EndIf
         End Sequence
          
         //Restaurando bloco de erro do sistema
