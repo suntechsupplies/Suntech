@@ -28,7 +28,7 @@ User function MAAVCRPR()
 	local aArea	 :=	GetArea()
 	Local lRet	 := ParamIxb[7]
 
-	If lRet == .F. .AND. Alltrim(SC5->C5_ZZSITFI) $ "2"
+	If lRet == .F. .AND. Alltrim(SC5->C5_ZZSITFI) $ "27"
 		   lRet := .T.
 	endIf
 

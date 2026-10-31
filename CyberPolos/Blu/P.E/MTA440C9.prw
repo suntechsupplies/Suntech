@@ -31,7 +31,7 @@ User Function MTA440C9()
 
 
 //- Caso o pedido já tenha sido liberado no Crédito o mesmo não necessitará de nova liberação
-	If (SC5->C5_ZZSITFI $ '12')
+	If (SC5->C5_ZZSITFI $ '127')
 		DbSelectArea("SC9")
 		RecLock("SC9",.F.)  
 		SC9->C9_BLCRED := ""
