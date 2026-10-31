@@ -1,0 +1,88 @@
+#include 'protheus.ch'
+#include 'parmtype.ch'
+
+User Function FISVALNFE()
+
+	Local aArea   := GetArea()
+	Local aNota   := ParamIxb
+	Local cAlias  := GetNextAlias()
+	Local cQuery  := ""
+	Local cPedido := ""
+	Local cErro   := ""
+	Local nCampo  := 0
+	Local lEnvia  := .F.
+	Local bError  := Nil
+	Local oError  := Nil
+
+	If AllTrim(cFilAnt) != "02"
+		Return .T.
+	EndIf
+	If !IsInCallStack("AUTONFETRANS")
+		Return .T.
+	EndIf
+	If ValType(aNota) != "A"
+		Return .F.
+	EndIf
+	If Len(aNota) < 9
+		Return .F.
+	EndIf
+	For nCampo := 1 To 7
+		If nCampo != 3
+			If ValType(aNota[nCampo]) != "C"
+				Return .F.
+			EndIf
+		EndIf
+	Next nCampo
+	If AllTrim(aNota[1]) != "S" .Or. AllTrim(aNota[2]) != "02" .Or. ;
+	   Empty(aNota[4]) .Or. Empty(aNota[5]) .Or. ;
+	   AllTrim(aNota[6]) != "S00003" .Or. AllTrim(aNota[7]) != "01"
+		Return .F.
+	EndIf
+
+	bError := ErrorBlock({|oErr| Break(oErr)})
+	Begin Sequence
+		cQuery := "SELECT D2.D2_PEDIDO, CASE WHEN EXISTS (SELECT 1 FROM " + RetSqlName("ZTR") + " ZTR " + ;
+			"INNER JOIN " + RetSqlName("SC5") + " C5 ON C5.C5_FILIAL = ZTR.ZTR_FDEST " + ;
+			"AND C5.C5_NUM = ZTR.ZTR_PEDTRF AND C5.D_E_L_E_T_ = ' ' " + ;
+			"WHERE ZTR.D_E_L_E_T_ = ' ' AND ZTR.ZTR_FILORI = '03' AND ZTR.ZTR_FDEST = '02' " + ;
+			"AND ZTR.ZTR_STATUS = 'CRIADO' AND ZTR.ZTR_PEDTRF = D2.D2_PEDIDO " + ;
+			"AND C5.C5_CLIENTE = D2.D2_CLIENTE AND C5.C5_LOJACLI = D2.D2_LOJA " + ;
+			"AND C5.C5_TABELA = 'TTR' AND C5.C5_ZZORIGE = 'INT' AND C5.C5_ZZTPPED = 'TR') " + ;
+			"THEN 1 ELSE 0 END AS VINCULADO FROM " + RetSqlName("SD2") + " D2 " + ;
+			"WHERE D2.D_E_L_E_T_ = ' ' AND D2.D2_FILIAL = '02' " + ;
+			"AND D2.D2_DOC = '" + StrTran(aNota[4], "'", "''") + "' " + ;
+			"AND D2.D2_SERIE = '" + StrTran(aNota[5], "'", "''") + "' " + ;
+			"AND D2.D2_CLIENTE = 'S00003' AND D2.D2_LOJA = '01' " + ;
+			"AND EXISTS (SELECT 1 FROM " + RetSqlName("SF2") + " F2 WHERE F2.D_E_L_E_T_ = ' ' " + ;
+			"AND F2.F2_FILIAL = D2.D2_FILIAL AND F2.F2_DOC = D2.D2_DOC AND F2.F2_SERIE = D2.D2_SERIE " + ;
+			"AND F2.F2_CLIENTE = D2.D2_CLIENTE AND F2.F2_LOJA = D2.D2_LOJA)"
+		DbUseArea(.T., "TOPCONN", TcGenQry(,,ChangeQuery(cQuery)), cAlias, .F., .T.)
+		lEnvia := !(cAlias)->(Eof())
+		While !(cAlias)->(Eof())
+			If Empty(cPedido)
+				cPedido := AllTrim((cAlias)->D2_PEDIDO)
+			EndIf
+			If (cAlias)->VINCULADO != 1 .Or. Empty(cPedido) .Or. AllTrim((cAlias)->D2_PEDIDO) != cPedido
+				lEnvia := .F.
+				Exit
+			EndIf
+			(cAlias)->(DbSkip())
+		EndDo
+	Recover Using oError
+		lEnvia := .F.
+		If ValType(oError) == "O"
+			cErro := cValToChar(oError:Description)
+		Else
+			cErro := cValToChar(oError)
+		EndIf
+		ConOut("[ZTR NF-e] Transmissao bloqueada por falha na verificacao: " + cErro)
+	End Sequence
+	If Select(cAlias) > 0
+		(cAlias)->(DbCloseArea())
+	EndIf
+	RestArea(aArea)
+	ErrorBlock(bError)
+	ConOut("[ZTR NF-e] AutoNFe 02/" + AllTrim(aNota[4]) + "/" + AllTrim(aNota[5]) + ;
+		" espelho=" + cPedido + " permitido=" + cValToChar(lEnvia))
+
+Return lEnvia
