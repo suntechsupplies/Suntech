@@ -11,7 +11,6 @@ Etiqueta de Produtos
 
 #DEFINE VELOCIDADE_IMPRESSORA 4
 #DEFINE NLININI	 003
-#DEFINE NQUEBNOR 004
 
 user function ImpProd()
 
@@ -26,7 +25,6 @@ static function imprEtiq001()
 	local nQtdEtiq 	:= 1
 	local nLinha	:= NLININI
 	local nColuna   := 005
-	Local nQuebra	:= NQUEBNOR
 
 	local cBarZZ2   := ""
 
@@ -36,6 +34,12 @@ static function imprEtiq001()
 	local aProduto  := {}
 	local cProduto  := MV_PAR01
 	local nImpress  := MV_PAR02
+	local cTextoEtiqueta := ""
+	local aLinhasTexto := {}
+	local aLinhasModelo := {}
+	local aPosTexto := {40,37,34}
+	local nIdxLinha := 0
+	local nIdxModelo := 0
 
 	private cZPL
 
@@ -65,8 +69,10 @@ static function imprEtiq001()
 			nColuna := 055
 			lSeg := .T.
 		endif
+		nLinha := nLinha+3
 
 		aProduto := buscaItem(cProduto)
+		cTextoEtiqueta := AllTrim(SB1->B1_ZZCOEMB)
 
 		cBarZZ2 := buscaZZ2(cProduto)
 
@@ -81,33 +87,57 @@ static function imprEtiq001()
 				msgAlert("Produto não encontrado! Entrar em contato com o TI.")
 				return
 			else
+				cTextoEtiqueta := Lower(cTextoEtiqueta)
+				aLinhasTexto := {}
+				if !Empty(cTextoEtiqueta)
+					aLinhasTexto := quebraTextoEtiqueta(cTextoEtiqueta,55,3)
+					if Len(aLinhasTexto) == 0
+						MsgAlert("O texto da etiqueta excede o limite de tres linhas.")
+						MSCBCLOSEPRINTER()
+						return
+					endif
+				endif
+
+				// INICIO - Texto lateral rotacionado em 90 graus
+				for nIdxLinha := 1 to Len(aLinhasTexto)
+					MSCBSAY(nColuna+aPosTexto[nIdxLinha],6,aLinhasTexto[nIdxLinha],"R","0","018",,,,,.t.)
+				next nIdxLinha
+				// FIM - Texto lateral rotacionado em 90 graus
 
 				/* COLUNA, LINHA, TEXTO */
 				MSCBSAY(nColuna+5,nLinha,cBarZZ2,"N","0","020",,,,,.t.) // Código Barras ZZ2
 				nLinha := nLinha+3 
 				MSCBSAYBAR(nColuna+5,nLinha,cBarZZ2,"N","MB07",10,.f.,.F.,.F.,,2,2,.t.)
-				nLinha := nLinha+12
+				nLinha := nLinha+11
 				if !Empty(aProduto[4])
-					MSCBSAY(nColuna,nLinha,aProduto[4],"N","0","035",,,,,.t.) // 0006 Modelo
-					nLinha := nLinha+5
+					aLinhasModelo := quebraTextoEtiqueta(aProduto[4],18,2)
+					if Len(aLinhasModelo) == 0
+						MsgAlert("A descrição do modelo excede o limite de duas linhas.")
+						MSCBCLOSEPRINTER()
+						return
+					endif
+					for nIdxModelo := 1 to Len(aLinhasModelo)
+						MSCBSAY(nColuna,nLinha,aLinhasModelo[nIdxModelo],"N","0","030",,,,,.t.) // 0006 Modelo
+						nLinha := nLinha+3
+					next nIdxModelo
 				endif
 				MSCBSAY(nColuna,nLinha,aProduto[1],"N","0","035",,,,,.t.) // Cód Produto
-				nLinha := nLinha+7
+				nLinha := nLinha+5
 				if !Empty(aProduto[5])
 					MSCBSAY(nColuna,nLinha,aProduto[5],"N","0","020",,,,,.t.) // 0010 Armacao
-					nLinha := nLinha+4
+					nLinha := nLinha+3
 				endif
 				if !Empty(aProduto[6])
 					MSCBSAY(nColuna,nLinha,aProduto[6],"N","0","020",,,,,.t.) // 003 Lente
-					nLinha := nLinha+4
+					nLinha := nLinha+3
 				endif
 				if !Empty(aProduto[7])
 					MSCBSAY(nColuna,nLinha,aProduto[7],"N","0","020",,,,,.t.) // Categoria
-					nLinha := nLinha+5
+					nLinha := nLinha+3
 				endif
 				if !Empty(aProduto[8])
 					MSCBSAYBAR(nColuna+05,nLinha, aProduto[8],"N","MB04",10,.F.,.F.,.F.,,2,1,.F.,.F.,"1",.T.) // Código Barras EAN
-					nLinha := nLinha+11
+					nLinha := nLinha+14
 					cEAN := SUBSTR(aProduto[8], 1, 1)
 					MSCBSAY(nColuna+3,nLinha,cEAN,"N","0","021",,,,,.t.) // Código EAN
 					cEan := SUBSTR(aProduto[8], 2, 6)
@@ -115,7 +145,6 @@ static function imprEtiq001()
 					cEan := SUBSTR(aProduto[8], 8, 6)
 					MSCBSAY(nColuna+18,nLinha,cEAN,"N","0","021",,,,,.t.) // Código EAN
 				endif
-
 				if lSeg .OR. nI == nImpress
 					MSCBInfoEti("ETQ_AAA","100X100")
 					cZPL := MSCBEND()
@@ -135,6 +164,49 @@ static function imprEtiq001()
 	//U_ImpProd()	/*Vamos Implementar?*/
 
 return
+
+static function quebraTextoEtiqueta(cTexto,nMaxCaracteres,nMaxLinhas)
+
+	local aLinhas := {}
+	local cRestante := AllTrim(cTexto)
+	local cPalavra := ""
+	local cLinha := ""
+	local nEspaco := 0
+
+	while !Empty(cRestante)
+		nEspaco := At(" ",cRestante)
+		if nEspaco > 0
+			cPalavra := Left(cRestante,nEspaco-1)
+			cRestante := AllTrim(SubStr(cRestante,nEspaco+1))
+		else
+			cPalavra := cRestante
+			cRestante := ""
+		endif
+
+		if !Empty(cPalavra)
+			if Len(cPalavra) > nMaxCaracteres
+				return {}
+			endif
+
+			if Empty(cLinha)
+				cLinha := cPalavra
+			elseif Len(cLinha)+1+Len(cPalavra) <= nMaxCaracteres
+				cLinha += " "+cPalavra
+			else
+				AAdd(aLinhas,cLinha)
+				if Len(aLinhas) >= nMaxLinhas
+					return {}
+				endif
+				cLinha := cPalavra
+			endif
+		endif
+	enddo
+
+	if !Empty(cLinha)
+		AAdd(aLinhas,cLinha)
+	endif
+
+return aLinhas
 
 static function buscaItem(cCodPro)
 
@@ -219,7 +291,6 @@ static function buscaItem(cCodPro)
 		else
 			aAdd(aSBS, "")
 		endif
-
 	endif
 
 	/* POSICÃO 01 =  Código do Produto B1_COD */
@@ -230,7 +301,6 @@ static function buscaItem(cCodPro)
 	/* POSICÃO 06 =  Lente */
 	/* POSICÃO 07 =  Categoria do Produto B1_ZZCATEG */
 	/* POSICÃO 08 =  Código EAN para código de barras B1_CODBAR */
-
 return aSBS
 
 Static Function ValidPerg()
