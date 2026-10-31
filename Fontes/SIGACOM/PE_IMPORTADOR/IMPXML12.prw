@@ -31,6 +31,7 @@ User Function IMPXML12()
 		aAdd(aRetorno, {"D1_TES"		, cTes				, Nil })
 		aAdd(aRetorno, {"D1_TESACLA"	, cTes				, Nil })
 		aAdd(aRetorno, {"D1_CC"			, cCentroCusto		, Nil })
+	
 
 	Endif
 	
