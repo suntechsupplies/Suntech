@@ -56,36 +56,28 @@ WSMETHOD GET WSRECEIVE nPag WSSERVICE EjProGet
 	Local nPag			:= Self:nPag
 	Local cSetResp
 	Local nPagFim
-	Local aTabs		:= {}
 	Local _cEmpresa	:= "01"
 	Local _cFilial	:= "01"
-	Local _lSegue	:= .F.
 	Local nY
 
 	If FindFunction("WfPrepEnv")
-
-		//*****************************************************************
-		// Cofigura empresa/filial
-		//*****************************************************************
-		RpcSetEnv( _cEmpresa,_cFilial,,, "GET", "METHOD", aTabs,,,,)
 		cEmpant := _cEmpresa
 		cFilant := _cFilial
-	
-		//*****************************************************************
-		// Enquanto nao configura empresa e filial fica dentro
-		// do "laco" verificando
-		//*****************************************************************
-		While ! _lSegue
-			If _cEmpresa + _cFilial == cNumEmp
-				_lSegue := .T.
-			Endif
-		End
+		cNumEmp := _cEmpresa + _cFilial
 	Endif
 
 	//Verifica se há conexão em aberto, caso haja feche.
 	IF Select(cAliasTMP)>0
 		dbSelectArea(cAliasTMP)
 		(cAliasTMP)->(dbCloseArea())
+	EndIf
+
+	If Select("SB1") <= 0
+		Begin Sequence
+			DbUseArea(.T., "TOPCONN", RetSqlName("SB1"), "SB1", .F., .F.)
+		Recover
+			ConOut("[EJPRO] AVISO: nao foi possivel abrir SB1 via DbUseArea")
+		End Sequence
 	EndIf
 
 	//Select de cadastro de Produtos

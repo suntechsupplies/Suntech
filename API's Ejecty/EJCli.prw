@@ -55,30 +55,6 @@ WSMETHOD GET WSRECEIVE nPag, cTipo WSSERVICE EJcliGP
 	Local nPag		:= Self:nPag
 	Local cTipo		:= Self:cTipo
 	Local lRet		:= .T.
-	Local aTabs		:= {}
-	Local _cEmpresa	:= "01"
-	Local _cFilial	:= "01"
-	Local _lSegue	:= .F.
-
-	If FindFunction("WfPrepEnv")
-
-		//*****************************************************************
-		// Cofigura empresa/filial
-		//*****************************************************************
-		RpcSetEnv( _cEmpresa,_cFilial,,, "GET", "METHOD", aTabs,,,,)
-		cEmpant := _cEmpresa
-		cFilant := _cFilial
-
-		//*****************************************************************
-		// Enquanto nao configura empresa e filial fica dentro
-		// do "laco" verificando
-		//*****************************************************************
-		While ! _lSegue
-			If _cEmpresa + _cFilial == cNumEmp
-				_lSegue := .T.
-			Endif
-		End
-	Endif
 
 	//Verifica se há conexão em aberto, caso haja feche.
 	IF Select(cAliasTmp)>0
@@ -426,7 +402,7 @@ WSMETHOD POST WSSERVICE EJcliGP
 				cJSONRet += '"Status": "SUCESSO",'
 				cJSONRet += '"Mensagem": "Cliente com CPF/CNPJ ' + cCGC + ' Cadastrado com Sucesso!",'
 				cJSONRet += '"Codigo": "' + SA1->A1_COD + '",'
-				cJSONRet += '"Loja": "' + SA1->A1_LOJA + '"
+				cJSONRet += '"Loja": "' + SA1->A1_LOJA + '"'
 				cJSONRet += '}'
 
 				If  i < Len(oObj:CLIENTE)
@@ -444,7 +420,7 @@ WSMETHOD POST WSSERVICE EJcliGP
 			cJSONRet += '"Status": "Falha",'
 			cJSONRet += '"Mensagem": "Cliente com CPF/CNPJ ' + cCGC + ' Ja cadastrado",'
 			cJSONRet += '"Codigo": "' + SA1->A1_COD + '",'
-			cJSONRet += '"Loja": "' + SA1->A1_LOJA + '"
+			cJSONRet += '"Loja": "' + SA1->A1_LOJA + '"'
 			cJSONRet += '}'
 
 			If  i < Len(oObj:CLIENTE)
@@ -562,7 +538,7 @@ WSMETHOD PUT WSRECEIVE RECEIVE WSSERVICE EJcliGP
 			cJSONRet += '"Status": "SUCESSO",'
 			cJSONRet += '"Mensagem": "Cliente com CPF/CNPJ ' + cCGC + ' Alterado com Sucesso!",'
 			cJSONRet += '"Codigo": "' + SA1->A1_COD + '",'
-			cJSONRet += '"Loja": "' + SA1->A1_LOJA + '"
+			cJSONRet += '"Loja": "' + SA1->A1_LOJA + '"'
 			cJSONRet += '}'
 
 			::SetResponse( cJSONRet )

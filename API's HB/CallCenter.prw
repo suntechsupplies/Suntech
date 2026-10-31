@@ -31,7 +31,6 @@
 //-------------------------------------------------------------
 // Correcoes v2.0:
 //   - Cada rotina agora usa cRotinaTMK correto (1/2/3)
-//   - Tabelas abertas por rotina (aTabs dinamico)
 //   - cAliasChk dinamico: SUC(1) / SUA(2) / ACF(3)
 //   - Nova funcao CCBuildMark para Telemarketing (SUC/SUD)
 //   - CCBuildCob (Telecobranca) agora e invocada corretamente
@@ -163,7 +162,6 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
     Local cRotinaTMK := ""
     Local aCabec    := {}
     Local aItens    := {}
-    Local aTabs     := {}
     Local cMsg      := ""
     Local cVal2     := ""
     Local oErr      := Nil
@@ -171,6 +169,7 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
     Local nDbg      := 0
     Local nEr       := 0
     Local cMsgReal  := ""
+    Local cMsgObs   := ""
     Local cAliasChk := ""
     Local nRecBefore := 0
     Local nRecAfter  := 0
@@ -220,42 +219,40 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
         Return .F.
     EndIf
 
+    If cRotina == "2"
+        cVal  := CCGetStr(CCGetObj(oObj, "cabecalho"), "processStatusCode", "")
+        If Empty(cVal)
+            cVal := CCGetStr(CCGetObj(oObj, "cabecalho"), "status", "")
+        EndIf
+        cVal2 := CCGetStr(CCGetObj(oObj, "cabecalho"), "processStatusDescription", "")
+        If (Empty(cVal) .And. !Empty(cVal2)) .Or. (!Empty(cVal) .And. Empty(cVal2))
+            oResponse := CCBuildResp(.F., "Os campos 'processStatusCode' e 'processStatusDescription' devem ser informados juntos.", Nil)
+            oSelf:SetStatus(400)
+            oSelf:SetResponse(oResponse)
+            Return .F.
+        EndIf
+    EndIf
+
     bOldErr := ErrorBlock({|e| oErr := e, Break(e)})
 
     Begin Sequence
 
-        // Tabelas abertas por rotina:
-        //   1=Telemarketing: SUC/SUD
-        //   2=Televendas:    SUA/SUB/SC5/SC6 etc.
-        //   3=Telecobranca:  ACF/ACG/SK1
-        Do Case
-            Case cRotina == "1"
-                aTabs := {"SUC","SUD","SA1","SU7","SU6","SU5","SUS","SX5"}
-            Case cRotina == "2"
-                aTabs := {"SUA","SUB","SB1","SA1","SUS","SU5","SU6","SE4","AC8","SA4","SU7","SF4","SK1","SC5","SC6","SX5"}
-            Case cRotina == "3"
-                aTabs := {"ACF","ACG","SK1","SA1","SU7","SU6","SU5","SUS","SX5"}
-        EndCase
-
         ConOut("[CALLCENTER API] ============================================")
-        ConOut("[CALLCENTER API] ANTES RpcSetEnv: _cEmpresa=[" + _cEmpresa + "] _cFilial=[" + _cFilial + "]")
-        ConOut("[CALLCENTER API] ANTES RpcSetEnv: cEmpAnt=[" + IIf(Type("cEmpAnt")=="C", cEmpAnt, "N/A") + "] cFilAnt=[" + IIf(Type("cFilAnt")=="C", cFilAnt, "N/A") + "]")
+        ConOut("[CALLCENTER API] Empresa solicitada: _cEmpresa=[" + _cEmpresa + "] _cFilial=[" + _cFilial + "]")
+        ConOut("[CALLCENTER API] Ambiente REST atual: cEmpAnt=[" + IIf(Type("cEmpAnt")=="C", cEmpAnt, "N/A") + "] cFilAnt=[" + IIf(Type("cFilAnt")=="C", cFilAnt, "N/A") + "]")
 
-        // Em WSRESTFUL o ambiente ja esta aberto na empresa configurada no APPSERVER.INI
-        // (geralmente "01"). Para trocar de empresa em runtime, precisamos primeiro fechar
-        // o ambiente atual com RESET ENVIRONMENT antes do RpcSetEnv.
-        // Variaveis publicas corretas no Protheus: cEmpAnt, cFilAnt.
-        If (Type("cEmpAnt") == "C" .And. !Empty(cEmpAnt) .And. cEmpAnt != _cEmpresa) .Or. ;
-           (Type("cFilAnt") == "C" .And. !Empty(cFilAnt) .And. cFilAnt != _cFilial)
-            ConOut("[CALLCENTER API] Trocando ambiente: " + ;
-                   IIf(Type("cEmpAnt")=="C", cEmpAnt, "?") + "/" + ;
-                   IIf(Type("cFilAnt")=="C", cFilAnt, "?") + " -> " + _cEmpresa + "/" + _cFilial)
-            RESET ENVIRONMENT
+        // Mesmo padrao de Customers: usa o ambiente REST e informa a empresa/filial
+        // solicitadas sem tentar abrir uma nova sessao com RpcSetEnv.
+        If FindFunction("WfPrepEnv") .And. !Empty(_cFilial)
+            If Empty(_cEmpresa)
+                _cEmpresa := "01"
+            EndIf
+            cEmpAnt := _cEmpresa
+            cFilAnt := _cFilial
+            cNumemp := _cEmpresa + _cFilial
         EndIf
 
-        RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(), aTabs)
-
-        ConOut("[CALLCENTER API] APOS  RpcSetEnv: cEmpAnt=[" + IIf(Type("cEmpAnt")=="C", cEmpAnt, "N/A") + "] cFilAnt=[" + IIf(Type("cFilAnt")=="C", cFilAnt, "N/A") + "]")
+        ConOut("[CALLCENTER API] Ambiente selecionado: cEmpAnt=[" + IIf(Type("cEmpAnt")=="C", cEmpAnt, "N/A") + "] cFilAnt=[" + IIf(Type("cFilAnt")=="C", cFilAnt, "N/A") + "]")
         ConOut("[CALLCENTER API] Empresa: " + _cEmpresa + " Filial: " + _cFilial + ;
                " Opcao: " + cValToChar(nOpcao) + " Rotina: " + cRotina)
 
@@ -346,6 +343,9 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
                 ConOut("[CALLCENTER API] FALLBACK ATIVO: A410VZ ausente no RPO. Gravando SUA diretamente para UA_OPER=3.")
                 cMsg := CCDirectInsertSUA(aCabec, @oData, cRotina)
                 lCCApiMode := .F.
+                If Empty(cMsg)
+                    cMsg := CCSaveAttendObs(oData, oObj)
+                EndIf
                 If Empty(cMsg)
                     ConOut("[CALLCENTER API] FALLBACK: Atendimento incluido com sucesso (recno=" + ;
                            cValToChar(IIf(oData != Nil .And. ValType(oData) == "J", oData['recno'], 0)) + ")")
@@ -518,13 +518,38 @@ Static Function CCProcessRequest(oSelf, oObj, _cEmpresa, _cFilial, nOpcao)
         Else
             // lMsErroAuto = .F. significa que o TMKA271 gravou com sucesso.
             // Se oData = Nil, CCGetProcessData nao localizou o registro (problema de leitura),
-            // mas a gravacao ocorreu � registramos o aviso e retornamos sucesso normalmente.
+            // mas a gravacao ocorreu � registramos o aviso e retornamos sucesso normalmente.
             If oData == Nil
                 ConOut("[CALLCENTER API] AVISO: lMsErroAuto=F mas CCGetProcessData retornou Nil (rotina=" + cRotina + "). Registro gravado mas nao recuperado.")
             EndIf
-            cMsg := IIf(nOpcao == 3, "Atendimento incluido com sucesso.", "Atendimento alterado com sucesso.")
-            oResponse := CCBuildResp(.T., cMsg, oData)
-            oSelf:SetStatus(200)
+            cMsgReal := ""
+            cMsgObs  := ""
+            If cRotina == "2" .And. (nOpcao == 3 .Or. nOpcao == 4) .And. ;
+               ValType(oData) == "J"
+                cMsgObs := CCSaveAttendObs(oData, oObj)
+            EndIf
+            If cRotina == "2" .And. nOpcao == 3 .And. ;
+               AllTrim(cValToChar(CCGetAutoField(aCabec, "UA_OPER", ""))) == "1" .And. ;
+               ValType(oData) == "J"
+                cMsgReal := CCPosPed(oData, oObj)
+            EndIf
+
+            If !Empty(cMsgObs) .Or. !Empty(cMsgReal)
+                cMsg := "Atendimento criado com falha no pos-processamento."
+                If !Empty(cMsgObs)
+                    cMsg += " Observacao: " + cMsgObs
+                EndIf
+                If !Empty(cMsgReal)
+                    cMsg += " Pedido: " + cMsgReal
+                EndIf
+                oResponse := CCBuildResp(.F., cMsg, oData)
+                oSelf:SetStatus(422)
+                lRet := .F.
+            Else
+                cMsg := IIf(nOpcao == 3, "Atendimento incluido com sucesso.", "Atendimento alterado com sucesso.")
+                oResponse := CCBuildResp(.T., cMsg, oData)
+                oSelf:SetStatus(200)
+            EndIf
         EndIf
 
     Recover
@@ -712,6 +737,223 @@ Static Function CCGetProcessData(cRotina, oObj, aCabec, aItens)
     RestArea(aArea)
 
 Return oData
+
+//-------------------------------------------------------------
+// CCSaveAttendObs - Grava observacao em memo antigo (SUA/SYP).
+//-------------------------------------------------------------
+Static Function CCSaveAttendObs(oData, oObj)
+
+    Local aArea      := GetArea()
+    Local cNumAtend  := ""
+    Local cObs       := CCGetStr(CCGetObj(oObj, "cabecalho"), "observation", "")
+    Local cErro      := ""
+    Local nTamObs    := 0
+    Local lLocked    := .F.
+    Local oErr       := Nil
+    Local bOldErr    := ErrorBlock({|e| oErr := e, Break(e)})
+
+    If Empty(cObs)
+        ErrorBlock(bOldErr)
+        RestArea(aArea)
+        Return ""
+    EndIf
+
+    Begin Sequence
+        If ValType(oData) != "J" .Or. ValType(oData["attendanceNumber"]) == "U"
+            cErro := "Numero do atendimento nao retornado para gravar a observacao."
+            Break
+        EndIf
+        cNumAtend := AllTrim(cValToChar(oData["attendanceNumber"]))
+        If Empty(cNumAtend)
+            cErro := "Numero do atendimento vazio para gravar a observacao."
+            Break
+        EndIf
+
+        DbSelectArea("SUA")
+        SUA->(DbSetOrder(1))
+        If !SUA->(DbSeek(xFilial("SUA") + PadR(cNumAtend, TamSX3("UA_NUM")[1])))
+            cErro := "Atendimento " + cNumAtend + " nao localizado na SUA para gravar a observacao."
+            Break
+        EndIf
+
+        If !RecLock("SUA", .F.)
+            cErro := "Nao foi possivel bloquear o atendimento " + cNumAtend + " na SUA."
+            Break
+        EndIf
+        lLocked := .T.
+        nTamObs := TamSX3("UA_OBS")[1]
+        MSMM(, nTamObs, , cObs, 1, , , "SUA", "UA_CODOBS")
+        SUA->(MsUnlock())
+        lLocked := .F.
+
+        ConOut("[CALLCENTER API] Observacao gravada em UA_OBS para o atendimento " + cNumAtend)
+    Recover
+        If lLocked
+            SUA->(MsUnlock())
+        EndIf
+        If ValType(oErr) != "U"
+            cErro := "Falha gravando UA_OBS do atendimento " + cNumAtend + ": " + CCGetErrMsg(oErr)
+        ElseIf Empty(cErro)
+            cErro := "Falha gravando UA_OBS do atendimento " + cNumAtend + "."
+        EndIf
+    End Sequence
+
+    ErrorBlock(bOldErr)
+    RestArea(aArea)
+
+Return cErro
+
+//-------------------------------------------------------------
+// CCPosPed - Registra origem e libera pedido gerado
+// pelo atendimento de Televendas.
+//-------------------------------------------------------------
+Static Function CCPosPed(oData, oObj)
+
+    Local cNumPed := ""
+    Local cErro   := ""
+    Local cObs    := CCGetStr(CCGetObj(oObj, "cabecalho"), "observation", "")
+    Local cEndEnt := CCGetStr(CCGetObj(oObj, "cabecalho"), "deliveryAddress", "")
+    Local cNota   := ""
+
+    If !Empty(cEndEnt)
+        cNota := "ENTREGA: " + cEndEnt
+    EndIf
+    If !Empty(cObs)
+        If !Empty(cNota)
+            cNota += " | "
+        EndIf
+        cNota += "OBS: " + cObs
+    EndIf
+    If !Empty(cNota)
+        cNota := Left(cNota, TamSX3("C5_MENNOTA")[1])
+    EndIf
+
+    Begin Sequence
+        If ValType(oData) != "J" .Or. ValType(oData["salesOrderNumber"]) == "U"
+            Return "Numero do pedido nao retornado pelo TMKA271."
+        EndIf
+        cNumPed := AllTrim(cValToChar(oData["salesOrderNumber"]))
+    Recover
+        cNumPed := ""
+    End Sequence
+
+    If Empty(cNumPed)
+        Return "Numero do pedido nao retornado pelo TMKA271."
+    EndIf
+
+    cErro := CCLibPed(cNumPed, cNota)
+    If Empty(cErro)
+        ConOut("[CALLCENTER API] Origem ERP gravada e liberacao aplicada ao pedido " + cNumPed)
+    EndIf
+
+Return cErro
+
+//-------------------------------------------------------------
+// CCLibPed - Aplica origem ERP e liberacao do pedido
+// conforme o fluxo da API de Orders.
+//-------------------------------------------------------------
+Static Function CCLibPed(cNumPed, cNota)
+
+    Local aArea    := GetArea()
+    Local cErro    := ""
+    Local cFilPed  := ""
+    Local cItem    := ""
+    Local nRecSC6  := 0
+    Local nQtdLib  := 0
+    Local oErr     := Nil
+    Local bOldErr  := ErrorBlock({|e| oErr := e, Break(e)})
+
+    Begin Sequence
+        DbSelectArea("SC5")
+        SC5->(DbSetOrder(1))
+        If !SC5->(DbSeek(xFilial("SC5") + PadR(cNumPed, TamSX3("C5_NUM")[1])))
+            cErro := "Pedido " + AllTrim(cNumPed) + " nao localizado na SC5."
+            Break
+        EndIf
+
+        cFilPed := SC5->C5_FILIAL
+        If !RecLock("SC5", .F.)
+            cErro := "Nao foi possivel bloquear o pedido " + AllTrim(cNumPed) + " na SC5."
+            Break
+        EndIf
+        SC5->C5_ZZORIGE := "ERP"
+        If !Empty(cNota)
+            SC5->C5_MENNOTA := cNota
+        EndIf
+        SC5->(MsUnlock())
+
+        DbSelectArea("SC6")
+        SC6->(DbSetOrder(1))
+        SC6->(MsSeek(cFilPed + cNumPed))
+
+        While !SC6->(EoF()) .And. SC6->C6_FILIAL == cFilPed .And. SC6->C6_NUM == cNumPed
+            nRecSC6 := SC6->(RecNo())
+            cItem   := SC6->C6_ITEM
+            nQtdLib := SC6->C6_QTDVEN
+
+            If Select("SC9") > 0
+                DbSelectArea("SC9")
+                SC9->(DbSetOrder(1))
+                SC9->(DbSeek(xFilial("SC9") + cNumPed + cItem))
+                While !SC9->(EoF()) .And. ;
+                      SC9->(C9_FILIAL + C9_PEDIDO + C9_ITEM) == xFilial("SC9") + cNumPed + cItem
+                    SC9->(a460Estorna(.T.))
+                    SC9->(DbSkip())
+                EndDo
+            EndIf
+
+            DbSelectArea("SC6")
+            SC6->(DbGoTo(nRecSC6))
+            SC6->(DbSkip())
+        EndDo
+
+        DbSelectArea("SC5")
+        SC5->(DbSetOrder(1))
+        If !SC5->(DbSeek(xFilial("SC5") + PadR(cNumPed, TamSX3("C5_NUM")[1])))
+            cErro := "Pedido " + AllTrim(cNumPed) + " nao localizado na SC5 para liberacao."
+            Break
+        EndIf
+        If !RecLock("SC5", .F.)
+            cErro := "Nao foi possivel bloquear o pedido " + AllTrim(cNumPed) + " para liberacao."
+            Break
+        EndIf
+        SC5->C5_LIBEROK := "S"
+        SC5->C5_ZZSITFI := "2"
+        SC5->C5_ZZSITCO := "1"
+        SC5->(MsUnlock())
+
+        DbSelectArea("SC6")
+        SC6->(DbSetOrder(1))
+        SC6->(MsSeek(cFilPed + cNumPed))
+        While !SC6->(EoF()) .And. SC6->C6_FILIAL == cFilPed .And. SC6->C6_NUM == cNumPed
+            nRecSC6 := SC6->(RecNo())
+            nQtdLib := SC6->C6_QTDVEN
+            MaLibDoFat(;
+                nRecSC6,;
+                nQtdLib,;
+                ,;
+                ,;
+                .T.,;
+                .T.,;
+                .F.,;
+                .F.;
+            )
+            SC6->(DbGoTo(nRecSC6))
+            SC6->(DbSkip())
+        EndDo
+
+    Recover
+        If ValType(oErr) != "U"
+            cErro := "Falha ao liberar pedido " + AllTrim(cNumPed) + ": " + CCGetErrMsg(oErr)
+        Else
+            cErro := "Falha ao liberar pedido " + AllTrim(cNumPed) + "."
+        EndIf
+    End Sequence
+
+    ErrorBlock(bOldErr)
+    RestArea(aArea)
+
+Return cErro
 
 //-------------------------------------------------------------
 // CCDirectInsertSUA - Fallback: insere registro SUA diretamente
@@ -1243,6 +1485,11 @@ Static Function CCBuildAtend(oObj, nOpcao, aCabec, aItens)
         CCAddField(aCabec, "UA_ZZSTATU", cVal)
     EndIf
 
+    cVal := CCGetStr(oCab, "processStatusDescription", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UA_ZZDSTAT", cVal)
+    EndIf
+
     cVal := CCGetStr(oCab, "responseCode", "")
     If !Empty(cVal)
         CCAddField(aCabec, "UA_ZZRESP", cVal)
@@ -1411,6 +1658,11 @@ Static Function CCBuildVend(oObj, nOpcao, aCabec, aItens, cForceOper)
     cVal := CCGetStr(oCab, "processStatusCode", "")
     If !Empty(cVal)
         CCAddField(aCabec, "UA_ZZSTATU", cVal)
+    EndIf
+
+    cVal := CCGetStr(oCab, "processStatusDescription", "")
+    If !Empty(cVal)
+        CCAddField(aCabec, "UA_ZZDSTAT", cVal)
     EndIf
 
     cVal := CCGetStr(oCab, "responseCode", "")
@@ -1618,9 +1870,14 @@ Static Function CCBuildVend(oObj, nOpcao, aCabec, aItens, cForceOper)
         EndIf
 
         If Len(aLinha) > 0
+            If nOpcao == 3
+                FWVetByDic(aLinha, "SUB")
+            EndIf
             AADD(aItens, aLinha)
         EndIf
     Next nI
+
+    FWVetByDic(aCabec, "SUA")
 
 Return Nil
 
@@ -1936,7 +2193,7 @@ Static Function CCSanitizeStr(cStr)
     cRet := StrTran(cRet, "â", "A") // a circunflexo
     cRet := StrTran(cRet, "é", "E") // e agudo
     cRet := StrTran(cRet, "ê", "E") // e circunflexo
-    cRet := StrTran(cRet, "�", "I") // i agudo
+    cRet := StrTran(cRet, "�", "I") // i agudo
     cRet := StrTran(cRet, "ó", "O") // o agudo
     cRet := StrTran(cRet, "ô", "O") // o circunflexo
     cRet := StrTran(cRet, "õ", "O") // o til
@@ -1944,7 +2201,7 @@ Static Function CCSanitizeStr(cStr)
 
     cRet := StrTran(cRet, "Ã", "A") // A til
     cRet := StrTran(cRet, "Ç", "C") // C cedilha
-    cRet := StrTran(cRet, "�", "A") // A agudo
+    cRet := StrTran(cRet, "�", "A") // A agudo
     cRet := StrTran(cRet, "Â", "A") // A circunflexo
     cRet := StrTran(cRet, "É", "E") // E agudo
     cRet := StrTran(cRet, "Ê", "E") // E circunflexo

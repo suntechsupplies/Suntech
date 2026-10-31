@@ -37,7 +37,7 @@ WSRESTFUL EJTitulo DESCRIPTION Desc_Rest
 	WSDATA cTipo    AS String
 	
 	WSMETHOD GET DESCRIPTION Desc_Get WSSYNTAX "/EJTitulo || /EJTitulo/{}"
-	WSMETHOD PUT DESCRIPTION Desc_Put WSSYNTAX "/EJTitulo"	
+	WSMETHOD PUT DESCRIPTION Desc_Put WSSYNTAX "/EJTitulo?{cPrefixo,cNumero,cParcela,cTipo}"
 
 END WSRESTFUL
 
@@ -50,32 +50,13 @@ WSMETHOD GET WSRECEIVE nPag HEADERPARAM TENANTID WSSERVICE EJTitulo
 	Local lRet		:= .T.
 	Local nPagFim
 	Local nX		
+	Local _cFilial := ""
 
 	// define o tipo de retorno do método
 	::SetContentType("application/json")
 
-    //**********************************************************************************
-	// Efetua a preparação do ambiente 
-	//**********************************************************************************
-	/*
-    If FindFunction("WfPrepEnv") //.And. cNumemp <> _cEmpresa + _cFilial 
-		WfPrepEnv(_cEmpresa,_cFilial)
-		cEmpant := _cEmpresa
-		cFilant := _cFilial
-		cNumEmp	:= _cEmpresa + _cFilial 
-		Sleep(5000)
-	Endif
-    */
-
-	If !Empty(SELF:TENANTID)
-		_cEmpresa := Left(Upper(SELF:TENANTID), At(",",Upper(SELF:TENANTID))-1)
-		_cFilial := Substr(Upper(SELF:TENANTID), At(",",Upper(SELF:TENANTID))+1)
-	EndIf
-
-	cEmpAnt := _cEmpresa
-	cFilAnt := _cFilial
-
-	// < Fim > -------------------------------------------------------------------------
+	Default nPag := 1
+	_cFilial := xFilial("SE1")
 
 	//Verifica se há conexão em aberto, caso haja feche.
 	IF Select(cAliasTmp)>0
@@ -112,7 +93,9 @@ WSMETHOD GET WSRECEIVE nPag HEADERPARAM TENANTID WSSERVICE EJTitulo
 								ELSE NULL 
 							END AS DELETED
 				FROM 		%Table:SE1% T
-				WHERE 		T.E1_ZSTATUS <> '9' 
+				WHERE 		T.E1_FILIAL = %exp:_cFilial%
+				AND 		T.%NotDel%
+				AND 		T.E1_ZSTATUS <> '9' 
 				ORDER BY	T.R_E_C_N_O_
 
 	EndSql
@@ -129,7 +112,9 @@ WSMETHOD GET WSRECEIVE nPag HEADERPARAM TENANTID WSSERVICE EJTitulo
 
 	If (cAliasTmp)->( Eof() )
 
-		cSetResp := '{"TE_TITULO": [ "Retorno":"Nao Existe Itens Nessa Pagina" ] } '
+		cSetResp := '{"TE_TITULO":[{"Retorno":"Nao Existe Itens Nessa Pagina"}]'
+		cSetResp += ',"PaginalAtual":' + cValToChar(nPag)
+		cSetResp += ',"TotalDePaginas":0}'
 		lRet	 := .F.
 
 	Else
@@ -201,10 +186,10 @@ WSMETHOD PUT WSRECEIVE cPrefixo, cNumero, cParcela, cTipo HEADERPARAM TENANTID W
 	Local cArqLog 	 := ''
 	Local cError     := ''
 	Local cJSON      := Self:GetContent() 							   // –> Pega a string do JSON
-	Local cPrefixo   := PAD(Self:cPrefixo,TAMSX3('E1_PREFIXO')[1])     // –> Pega o parâmetro recebido pela URL
-	Local cNumero    := PAD(Self:cNumero ,TAMSX3('E1_NUM')[1])         // –> Pega o parâmetro recebido pela URL
-	Local cParcela   := PAD(Self:cParcela,TAMSX3('E1_PARCELA')[1])     // –> Pega o parâmetro recebido pela URL
-	Local cTipo      := PAD(Self:cTipo   ,TAMSX3('E1_TIPO')[1])        // –> Pega o parâmetro recebido pela URL
+	Local cPrefixo   := ''
+	Local cNumero    := ''
+	Local cParcela   := ''
+	Local cTipo      := ''
 	Local cCliFor	 := ''
 	Local cLoja	     := ''
 	Local cBanco	 := '323'
@@ -216,7 +201,6 @@ WSMETHOD PUT WSRECEIVE cPrefixo, cNumero, cParcela, cTipo HEADERPARAM TENANTID W
 	Local cStatus    := ''
 	Local dDataBaixa := Date()
 	Local aBaixa     := {}
-	Local aTables    := {"SC5","SE1","SE5"}
 	Local aFINA100   := {}
 	Local nOpc 		 := 0 
 	Local lRet       := .T.
@@ -235,59 +219,88 @@ WSMETHOD PUT WSRECEIVE cPrefixo, cNumero, cParcela, cTipo HEADERPARAM TENANTID W
 	Local nY		 := 0
 	Local nZ         := 0
 	Local aArea 	 := GetArea()
+	Local lAchou     := .F.
+	Local bOldErr    := Nil
+	Local oError     := Nil
 
 	Private lMsErroAuto := .F.
-
-	If !Empty(SELF:TENANTID)
-		_cEmpresa := Left(Upper(SELF:TENANTID), At(",",Upper(SELF:TENANTID))-1)
-		_cFilial := Substr(Upper(SELF:TENANTID), At(",",Upper(SELF:TENANTID))+1)
-	EndIf
-
-	cEmpAnt := _cEmpresa
-	cFilAnt := _cFilial	
-
-	//PREPARE ENVIRONMENT EMPRESA '01' FILIAL cEmpresa TABLES 'SE1,SE5' MODULO 'FIN'
-	RpcSetEnv(cEmpAnt, cFilAnt,,,,GetEnvServer(),aTables)
-
-	If !ExistDir("\log_api")
-		MakeDir("\log_api")
-	EndIf
 
 	::SetContentType("application/json")
 
 	// –> Deserializa a string JSON
 	FWJsonDeserialize(cJson, @oTitulo)
+	If oTitulo == Nil .Or. ValType(oTitulo) != "A"
+		::SetStatus(400)
+		::SetResponse('{"code":400,"message":"Body JSON invalido"}')
+		Return .F.
+	EndIf
+
+	If Len(oTitulo) == 0
+		::SetStatus(400)
+		::SetResponse('{"code":400,"message":"Nenhum titulo informado"}')
+		Return .F.
+	EndIf
+
+	If ValType(Self:cPrefixo) == "C"
+		cPrefixo := PAD(Self:cPrefixo, TAMSX3('E1_PREFIXO')[1])
+	EndIf
+	If ValType(Self:cNumero) == "C"
+		cNumero := PAD(Self:cNumero, TAMSX3('E1_NUM')[1])
+	EndIf
+	If ValType(Self:cParcela) == "C"
+		cParcela := PAD(Self:cParcela, TAMSX3('E1_PARCELA')[1])
+	EndIf
+	If ValType(Self:cTipo) == "C"
+		cTipo := PAD(Self:cTipo, TAMSX3('E1_TIPO')[1])
+	EndIf
+
+	If Empty(AllTrim(cPrefixo)) .Or. Empty(AllTrim(cNumero)) .Or. Empty(AllTrim(cTipo))
+		::SetStatus(400)
+		::SetResponse('{"code":400,"message":"Parametros cPrefixo, cNumero e cTipo sao obrigatorios"}')
+		Return .F.
+	EndIf
+
+	bOldErr := ErrorBlock({|e| oError := e, Break(e)})
+	Begin Sequence
+
+	If !ExistDir("\log_api")
+		MakeDir("\log_api")
+	EndIf
 
 	For nZ :=1 to Len(oTitulo)
 
 		dbSelectArea("SE1")
 		SE1->(DbSetOrder(1))
+		cFilAnt := xFilial("SE1")
 		lAchou := SE1->(DbSeek(cFilAnt+cPrefixo+cNumero+cParcela+cTipo))
 
 		nValor  := oTitulo[nZ]:results[1]:transaction_amount
 		cStatus := oTitulo[nZ]:results[1]:money_release_status
 		cIdTrans:= cValToChar(oTitulo[nZ]:results[1]:id)
-		
-		cCliFor := SE1->E1_CLIENTE
-		cLoja   := SE1->E1_LOJA
 
-		dbSelectArea("SC5") 
-		SC5->(DbSetOrder(1))
+		If lAchou
+			cCliFor   := SE1->E1_CLIENTE
+			cLoja     := SE1->E1_LOJA
+			cNatureza := SE1->E1_NATUREZ
 
-		If SC5->(DbSeek(cFilAnt+SE1->E1_PEDIDO)) .AND. TRIM(SE1->E1_PEDECOM) == ''
-			Reclock("SE1",.F.)
-				SE1->E1_PEDECOM := SC5->C5_PEDECOM
-				SE1->E1_ZZPAYID := cIdTrans
-				SE1->E1_ZZSTPAY := cStatus				
-				SE1->E1_VENCREA := FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1]
-				SE1->E1_VENCTO  := FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1]  
+			dbSelectArea("SC5")
+			SC5->(DbSetOrder(1))
 
-				If SE1->E1_EMISSAO > FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1]
-					SE1->E1_EMISSAO := FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1] 
-				EndIf
+			If !Empty(SE1->E1_PEDIDO) .And. SC5->(DbSeek(cFilAnt+SE1->E1_PEDIDO)) .AND. TRIM(SE1->E1_PEDECOM) == ''
+				Reclock("SE1",.F.)
+					SE1->E1_PEDECOM := SC5->C5_PEDECOM
+					SE1->E1_ZZPAYID := cIdTrans
+					SE1->E1_ZZSTPAY := cStatus
+					SE1->E1_VENCREA := FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1]
+					SE1->E1_VENCTO  := FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1]
 
-			SE1->(MsUnlock()) 
-		Endif
+					If SE1->E1_EMISSAO > FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1]
+						SE1->E1_EMISSAO := FwDateTimeToLocal(oTitulo[nZ]:results[1]:money_release_date)[1]
+					EndIf
+
+				SE1->(MsUnlock())
+			EndIf
+		EndIf
 
 		If lAchou .AND. SE1->E1_SALDO > 0		
 
@@ -361,7 +374,7 @@ WSMETHOD PUT WSRECEIVE cPrefixo, cNumero, cParcela, cTipo HEADERPARAM TENANTID W
 				Else
 
 					cMessage := '{ "code": 200, '
-					cMessage += ' "message": "Titulo ' + _cFilial + cPrefixo + cNumero + cParcela + cTipo + ' baixado com sucesso!",'
+					cMessage += ' "message": "Titulo ' + cFilAnt + cPrefixo + cNumero + cParcela + cTipo + ' baixado com sucesso!",'
 					cMessage += ' "filial" : "' + cFilAnt + '"'
 					lRet := .T.
 
@@ -379,7 +392,7 @@ WSMETHOD PUT WSRECEIVE cPrefixo, cNumero, cParcela, cTipo HEADERPARAM TENANTID W
 		Else
 
 			cMessage := '{ "code" : 402, '
-			cMessage += ' "message" : "Titulo ' + _cFilial + cPrefixo + cNumero + cParcela + cTipo + ' nao encontrado ou ja baixado.",'
+			cMessage += ' "message" : "Titulo ' + cFilAnt + cPrefixo + cNumero + cParcela + cTipo + ' nao encontrado ou ja baixado.",'
 			cMessage += ' "filial" : "' + cFilAnt + '"'	
 			lRet := .F.
 
@@ -542,16 +555,20 @@ WSMETHOD PUT WSRECEIVE cPrefixo, cNumero, cParcela, cTipo HEADERPARAM TENANTID W
 	
 	cFullMessage :=	'[' + cFullMessage + ']'
 
-	::SetResponse(cFullMessage) 
+	::SetResponse(cFullMessage)
+
+	Recover Using oError
+		cError := StrTran(FwNoAccent(oError:Description), '"', "'")
+		::SetStatus(500)
+		::SetResponse('{"code":500,"message":"' + cError + '"}')
+		lRet := .F.
+	End Sequence
+
+	ErrorBlock(bOldErr)
 
 	//-------------------------------------------------------------------
 	// Restauro a area de trabalho
 	//-------------------------------------------------------------------
-	SC5->(DBCloseArea())
-	SE5->(DBCloseArea())
-	SE1->(DBCloseArea())
-	RpcClearEnv() //Encerra o ambiente, fechando as devidas conexões	
-	//RESET ENVIRONMENT
 	RestArea(aArea)
 
 

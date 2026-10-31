@@ -9,6 +9,8 @@ WSRESTFUL taxinvoices DESCRIPTION "Lista e Inclui clientes no ERP Protheus "
 	WSDATA days      AS Integer OPTIONAL
 	WSDATA endDate   AS Integer OPTIONAL
 	WSDATA startDate AS Integer OPTIONAL
+	WSDATA company   AS String  OPTIONAL
+	WSDATA branch    AS String  OPTIONAL
 
 	WSMETHOD GET    DESCRIPTION 'Retorna lista de clientes' WSSYNTAX '/taxinvoices' /*PATH 'taxinvoices'*/ PRODUCES APPLICATION_JSON
 	WSMETHOD POST   DESCRIPTION 'Inclusão de registro'      WSSYNTAX '/taxinvoices' /*PATH 'taxinvoices'*/ PRODUCES APPLICATION_JSON
@@ -28,7 +30,7 @@ Retorna a lista de clientes.
 /*/
 //-------------------------------------------------------------------
 
-WSMETHOD GET WSRECEIVE searchKey, page, pageSize, endDate, startDate, days WSSERVICE taxinvoices
+WSMETHOD GET WSRECEIVE searchKey, page, pageSize, endDate, startDate, days, company, branch WSSERVICE taxinvoices
 
 	Local aDados := {}
 
@@ -56,6 +58,8 @@ WSMETHOD GET WSRECEIVE searchKey, page, pageSize, endDate, startDate, days WSSER
 	Local cToken     := ""
 	Local nPos
 	Local cNameWords := ""
+	Local cEmpresa   := Self:company
+	Local _cFilial   := Self:branch
 
 	Local oJson := JsonObject():New()
 
@@ -63,6 +67,17 @@ WSMETHOD GET WSRECEIVE searchKey, page, pageSize, endDate, startDate, days WSSER
 	Default nPage      := 1
 	Default nPageSize  := 10
 	Default nDays      := 30
+	Default dEndDate   := Date()
+	Default dStartDate := dEndDate - nDays
+
+	If FindFunction("WfPrepEnv") .And. !Empty(_cFilial)
+		If Empty(cEmpresa)
+			cEmpresa := "01"
+		EndIf
+		cEmpAnt := cEmpresa
+		cFilAnt := _cFilial
+		cNumEmp := cEmpresa + _cFilial
+	EndIf
 
 	//-------------------------------------------------------------------
 	// Tratativas para a chave de busca
@@ -449,7 +464,7 @@ WSMETHOD GET WSRECEIVE searchKey, page, pageSize, endDate, startDate, days WSSER
 
 Return(lRet)
 
-WSMETHOD POST WSRECEIVE WSSERVICE taxinvoices
+WSMETHOD POST WSRECEIVE company, branch WSSERVICE taxinvoices
 
 	Local lRet              := .T.
 	Local aDados            := {}
@@ -467,10 +482,21 @@ WSMETHOD POST WSRECEIVE WSSERVICE taxinvoices
 	Local nReg              := 0
 	Local nI                := 0
 	Local jResponse         := JsonObject():New()
+	Local cEmpresa          := Self:company
+	Local _cFilial          := Self:branch
 
 	Private lMsErroAuto     := .F.
 	Private lMsHelpAuto     := .T.
 	Private lAutoErrNoFile  := .T.
+
+	If FindFunction("WfPrepEnv") .And. !Empty(_cFilial)
+		If Empty(cEmpresa)
+			cEmpresa := "01"
+		EndIf
+		cEmpAnt := cEmpresa
+		cFilAnt := _cFilial
+		cNumEmp := cEmpresa + _cFilial
+	EndIf
 
 	//Se não existir a pasta de logs, cria
 	IF ! ExistDir(cDirLog)
@@ -481,6 +507,18 @@ WSMETHOD POST WSRECEIVE WSSERVICE taxinvoices
 	Self:SetContentType('application/json')
 	oJson  := JsonObject():New()
 	cError := oJson:FromJson(cJson)
+
+	If !Empty(cError) .Or. !oJson:HasProperty('objetos') .Or. ValType(oJson['objetos']) != 'A'
+		Self:setStatus(400)
+		oObjeto := JsonObject():New()
+		oObjeto['errorId']   := 'NEW004'
+		oObjeto['error']     := 'Parse do JSON'
+		oObjeto['solution']  := 'Informe o array objetos no body da requisicao'
+		aAdd(aDados, oObjeto)
+		jResponse['objects'] := aDados
+		Self:SetResponse(jResponse:toJSON())
+		Return .F.
+	EndIf
 
 	nReg := Len(oJson['objetos'])
 
@@ -611,7 +649,7 @@ WSMETHOD POST WSRECEIVE WSSERVICE taxinvoices
 
 Return lRet
 
-WSMETHOD PUT WSRECEIVE WSSERVICE taxinvoices
+WSMETHOD PUT WSRECEIVE company, branch WSSERVICE taxinvoices
 
 	Local lRet              := .T.
 	Local aDados            := {}
@@ -629,10 +667,21 @@ WSMETHOD PUT WSRECEIVE WSSERVICE taxinvoices
 	Local nReg              := 0
 	Local nI                := 0
 	Local jResponse         := JsonObject():New()
+	Local cEmpresa          := Self:company
+	Local _cFilial          := Self:branch
 
 	Private lMsErroAuto     := .F.
 	Private lMsHelpAuto     := .T.
 	Private lAutoErrNoFile  := .T.
+
+	If FindFunction("WfPrepEnv") .And. !Empty(_cFilial)
+		If Empty(cEmpresa)
+			cEmpresa := "01"
+		EndIf
+		cEmpAnt := cEmpresa
+		cFilAnt := _cFilial
+		cNumEmp := cEmpresa + _cFilial
+	EndIf
 
 	//Se não existir a pasta de logs, cria
 	IF ! ExistDir(cDirLog)
@@ -643,6 +692,18 @@ WSMETHOD PUT WSRECEIVE WSSERVICE taxinvoices
 	Self:SetContentType('application/json')
 	oJson  := JsonObject():New()
 	cError := oJson:FromJson(cJson)
+
+	If !Empty(cError) .Or. !oJson:HasProperty('objetos') .Or. ValType(oJson['objetos']) != 'A'
+		Self:setStatus(400)
+		oObjeto := JsonObject():New()
+		oObjeto['errorId']   := 'NEW004'
+		oObjeto['error']     := 'Parse do JSON'
+		oObjeto['solution']  := 'Informe o array objetos no body da requisicao'
+		aAdd(aDados, oObjeto)
+		jResponse['objects'] := aDados
+		Self:SetResponse(jResponse:toJSON())
+		Return .F.
+	EndIf
 
 	nReg := Len(oJson['objetos'])
 

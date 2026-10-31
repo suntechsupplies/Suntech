@@ -1,3 +1,4 @@
+#Include "prtopdef.ch"
 #Include "Protheus.ch"
 #Include "RESTFUL.ch"
 #Include "tbiconn.ch"
@@ -46,24 +47,8 @@ Return .T.
 WSMETHOD GET WSRECEIVE page, pageSize, orderNumber, externalId, pending, branch WSSERVICE Orders
 
 	Local lRet       := .T.
-	Local aTabs      := {}
-	Local _cEmpresa  := "01"
-	Local _cFilial   := "01"
 
 	::SetContentType("application/json")
-
-	// Get branch from query parameter
-	If !Empty(Self:branch)
-		_cFilial := Self:branch
-	EndIf
-
-	// Setup Environment
-	aTabs := {"SC5", "SC6", "SA1", "SA2", "SA3", "SA4", "SB1", "SB2", "SE4", "SF4", "DA0", "DA1"}
-	RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(),aTabs)
-	// Forca filial apos RpcSetEnv (seguindo padrao EJPedVen)
-	cEmpAnt := _cEmpresa
-	cFilAnt := _cFilial
-	cNumEmp := _cEmpresa + _cFilial
 
 	// Execute Query
 	If !Empty(Self:orderNumber) .Or. !Empty(Self:externalId)
@@ -77,15 +62,12 @@ Return lRet
 //=============================================================
 // POST Method - Create Order (single or batch)
 //=============================================================
-WSMETHOD POST WSSERVICE Orders
+WSMETHOD POST WSRECEIVE branch WSSERVICE Orders
 
 	Local lRet       := .T.
 	Local oResponse  := Nil
 	Local cJson      := Self:GetContent()
 	Local oObj       := Nil
-	Local aTabs      := {}
-	Local _cEmpresa  := "01"
-	Local _cFilial   := "01"
 	Local aOrders    := {}
 	Local aResults   := {}
 	Local nI         := 0
@@ -94,6 +76,9 @@ WSMETHOD POST WSSERVICE Orders
 	Local lBatch     := .F.
 	Local lAllOk     := .T.
 	Local cBranch    := ""
+	Local cEmpresa   := "01"
+	Local _cFilial   := "01"
+	Local cError     := ""
 
 	::SetContentType("application/json")
 
@@ -106,11 +91,6 @@ WSMETHOD POST WSSERVICE Orders
 		Return .F.
 	EndIf
 
-	// Get branch from query parameter
-	If !Empty(Self:branch)
-		_cFilial := Self:branch
-	EndIf
-
 	// Detect batch mode: {"orders": [...]}
 	// Check raw JSON for "orders" key to avoid invalid property error
 	lBatch := ('"orders"' $ cJson)
@@ -120,23 +100,26 @@ WSMETHOD POST WSSERVICE Orders
 	EndIf
 
 	If !lBatch
-		// Single order mode (backward compatible)
-		// Read branch from JSON body if not in query parameter
-		If Empty(Self:branch)
-			cBranch := GetJsonString(oObj, "branch", _cFilial)
-			If !Empty(cBranch)
-				_cFilial := cBranch
-			EndIf
+		If !ValidateOrderData(oObj, @cError, .T.)
+			oResponse := BuildResponse(.F., cError, Nil, Nil)
+			::SetStatus(400)
+			::SetResponse(oResponse)
+			Return .F.
 		EndIf
 
-		// Setup Environment
-		aTabs := {"SC5", "SC6", "SA1", "SA2", "SA3", "SA4", "SB1", "SB2", "SE4", "SF4", "DA0", "DA1"}
-		RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(),aTabs)
-		cEmpAnt := _cEmpresa
-		cFilAnt := _cFilial
-		cNumEmp := _cEmpresa + _cFilial
+		// Single order mode: the JSON defines company and branch.
+		cEmpresa := GetOrderCompany(oObj)
+		_cFilial := GetJsonString(oObj, "branch", "")
+		If Empty(_cFilial)
+			_cFilial := "01"
+		EndIf
 
-		ConOut("[ORDERS API] Environment setup - Empresa: " + cEmpAnt + " Filial: " + cFilAnt + " cNumEmp: " + cNumEmp)
+		If FindFunction("WfPrepEnv")
+			cEmpAnt := cEmpresa
+			cFilAnt := _cFilial
+			cNumemp := cEmpresa + _cFilial
+		EndIf
+
 		lRet := CreateOrder(Self, oObj)
 	Else
 		// Batch mode
@@ -146,20 +129,20 @@ WSMETHOD POST WSSERVICE Orders
 		For nI := 1 To Len(aOrders)
 			oOrderObj := aOrders[nI]
 
-			// Each order can have its own branch, fallback to query param
-			cBranch := GetJsonString(oOrderObj, "branch", _cFilial)
+			// Each order defines its own company and branch.
+			cEmpresa := GetOrderCompany(oOrderObj)
+			cBranch := GetJsonString(oOrderObj, "branch", "01")
 			If Empty(cBranch)
-				cBranch := _cFilial
+				cBranch := "01"
 			EndIf
 
-			ConOut("[ORDERS API] BATCH order " + cValToChar(nI) + "/" + cValToChar(Len(aOrders)) + " - Branch: " + cBranch)
+			If FindFunction("WfPrepEnv")
+				cEmpAnt := cEmpresa
+				cFilAnt := cBranch
+				cNumemp := cEmpresa + cBranch
+			EndIf
 
-			// Setup environment for each order (required for proper filial context)
-			aTabs := {"SC5", "SC6", "SA1", "SA2", "SA3", "SA4", "SB1", "SB2", "SE4", "SF4", "DA0", "DA1"}
-			RpcSetEnv(_cEmpresa, cBranch,,,,GetEnvServer(),aTabs)
-			cEmpAnt := _cEmpresa
-			cFilAnt := cBranch
-			cNumEmp := _cEmpresa + cBranch
+			ConOut("[ORDERS API] BATCH order " + cValToChar(nI) + "/" + cValToChar(Len(aOrders)) + " - Company: " + cEmpresa + " Branch: " + cBranch)
 
 			ConOut("[ORDERS API] xFilial SC5: [" + xFilial("SC5") + "] SF4: [" + xFilial("SF4") + "]")
 
@@ -189,14 +172,13 @@ Return lRet
 //=============================================================
 // PUT Method - Update Order
 //=============================================================
-WSMETHOD PUT WSSERVICE Orders
+WSMETHOD PUT WSRECEIVE branch WSSERVICE Orders
 
 	Local lRet       := .T.
 	Local oResponse  := Nil
 	Local cJson      := Self:GetContent()
 	Local oObj       := Nil
-	Local aTabs      := {}
-	Local _cEmpresa  := "01"
+	Local cEmpresa   := "01"
 	Local _cFilial   := "01"
 
 	::SetContentType("application/json")
@@ -210,18 +192,17 @@ WSMETHOD PUT WSSERVICE Orders
 		Return .F.
 	EndIf
 
-	// Get branch from query parameter
-	If !Empty(Self:branch)
-		_cFilial := Self:branch
+	cEmpresa := GetOrderCompany(oObj)
+	_cFilial := GetJsonString(oObj, "branch", "")
+	If Empty(_cFilial)
+		_cFilial := "01"
 	EndIf
 
-	// Setup Environment
-	aTabs := {"SC5", "SC6", "SA1", "SA2", "SA3", "SA4", "SB1", "SB2", "SE4", "SF4", "DA0", "DA1"}
-	RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(),aTabs)
-	// Forca filial apos RpcSetEnv (seguindo padrao EJPedVen)
-	cEmpAnt := _cEmpresa
-	cFilAnt := _cFilial
-	cNumEmp := _cEmpresa + _cFilial
+	If FindFunction("WfPrepEnv")
+		cEmpAnt := cEmpresa
+		cFilAnt := _cFilial
+		cNumemp := cEmpresa + _cFilial
+	EndIf
 
 	// Update Order
 	lRet := UpdateOrder(Self, oObj)
@@ -236,8 +217,7 @@ WSMETHOD DELETE WSRECEIVE orderNumber, externalId, branch WSSERVICE Orders
 	Local lRet       := .T.
 	Local cJson      := Self:GetContent()
 	Local oObj       := Nil
-	Local aTabs      := {}
-	Local _cEmpresa  := "01"
+	Local cEmpresa   := "01"
 	Local _cFilial   := "01"
 
 	::SetContentType("application/json")
@@ -249,17 +229,20 @@ WSMETHOD DELETE WSRECEIVE orderNumber, externalId, branch WSSERVICE Orders
 		oObj := Nil
 	EndIf
 
-	// Get branch from query parameter
-	If !Empty(Self:branch)
-		_cFilial := Self:branch
+	If oObj != Nil
+		cEmpresa := GetOrderCompany(oObj)
+		_cFilial := GetJsonString(oObj, "branch", "")
 	EndIf
 
-	// Setup Environment
-	aTabs := {"SC5", "SC6", "SA1", "SA2", "SA3", "SA4", "SB1", "SB2", "SE4", "SF4", "DA0", "DA1"}
-	RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(),aTabs)
-	cEmpAnt := _cEmpresa
-	cFilAnt := _cFilial
-	cNumEmp := _cEmpresa + _cFilial
+	If Empty(_cFilial)
+		_cFilial := IIf(Empty(Self:branch), "01", Self:branch)
+	EndIf
+
+	If FindFunction("WfPrepEnv")
+		cEmpAnt := cEmpresa
+		cFilAnt := _cFilial
+		cNumemp := cEmpresa + _cFilial
+	EndIf
 
 	// Delete Order
 	lRet := DeleteOrder(Self, oObj)
@@ -395,6 +378,23 @@ Static Function GetSingleOrder(oSelf)
 Return lRet
 
 //=============================================================
+// GetOrderCompany - Company from JSON, defaulting to 01
+//=============================================================
+Static Function GetOrderCompany(oObj)
+
+	Local cEmpresa := GetJsonString(oObj, "company", "")
+
+	If Empty(cEmpresa)
+		cEmpresa := GetJsonString(oObj, "empresa", "01")
+	EndIf
+
+	If Empty(cEmpresa)
+		cEmpresa := "01"
+	EndIf
+
+Return AllTrim(cEmpresa)
+
+//=============================================================
 // CrtOrdBatch - Create a single order in batch mode (returns JSON object)
 //=============================================================
 Static Function CrtOrdBatch(oObj, nSeqOrder)
@@ -525,6 +525,9 @@ Static Function CrtOrdBatch(oObj, nSeqOrder)
 			cNumPed := SC5->C5_NUM
 		EndIf
 
+		// Apply liberation flag (C5_LIBEROK) via RecLock
+		ApplyLiberOk(cNumPed, oObj)
+
 		oResItem['success']       := .T.
 		oResItem['message']       := "Order created successfully"
 		oResItem['orderNumber']   := AllTrim(cNumPed)
@@ -635,7 +638,7 @@ Static Function CreateOrder(oSelf, oObj)
 		PositionTables()
 
 		// Log the data being sent (for debugging)
-		ConOut("[ORDERS API] Creating order - Branch: " + cFilAnt)
+		ConOut("[ORDERS API] Creating order - Branch: " + xFilial("SC5"))
 		ConOut("[ORDERS API] xFilial SC5: [" + xFilial("SC5") + "]")
 		ConOut("[ORDERS API] xFilial SA1: [" + xFilial("SA1") + "]")
 		ConOut("[ORDERS API] xFilial SB1: [" + xFilial("SB1") + "]")
@@ -721,6 +724,9 @@ Static Function CreateOrder(oSelf, oObj)
 					oResult['recno']       := SC5->(RecNo())
 					oResult['warning']     := "Order created but approval module reported a warning"
 
+					// Apply liberation flag (C5_LIBEROK) via RecLock
+					ApplyLiberOk(cNumPed, oObj)
+
 					oResponse := BuildResponse(.T., "Order created successfully", oResult, Nil)
 					oSelf:SetContentType("application/json")
 					oSelf:SetStatus(201)
@@ -759,6 +765,9 @@ Static Function CreateOrder(oSelf, oObj)
 		// SC5 is already positioned at the created record after MsExecAuto
 		DbSelectArea("SC5")
 		cNumPed := SC5->C5_NUM
+
+		// Apply liberation flag (C5_LIBEROK) via RecLock
+		ApplyLiberOk(cNumPed, oObj)
 
 		// Return created order data
 		oResult := JsonObject():New()
@@ -927,6 +936,9 @@ Static Function UpdateOrder(oSelf, oObj)
 		DbSetOrder(1)
 		DbSeek(xFilial("SC5") + PadR(cOrderNum, TamSX3("C5_NUM")[1]))
 
+		// Apply liberation flag (C5_LIBEROK) via RecLock
+		ApplyLiberOk(cOrderNum, oObj)
+
 		// Return updated order data
 		oResult := JsonObject():New()
 		oResult['orderNumber'] := AllTrim(cOrderNum)
@@ -958,6 +970,73 @@ Static Function UpdateOrder(oSelf, oObj)
 	ErrorBlock(bOldErr)
 
 Return lRet
+
+//=============================================================
+// ApplyLiberOk - Libera pedido de venda apos MATA410
+//   isReleased = "S": estorna SC9, seta C5_LIBEROK e executa MaLibDoFat por item
+//   isReleased = "N" ou ausente: nao faz nada
+//=============================================================
+Static Function ApplyLiberOk(cNumPed, oObj)
+
+	Local cLiberOk := Upper(AllTrim(GetJsonString(oObj, "isReleased", "")))
+
+	// Apenas executa se explicitamente "S"
+	If cLiberOk != "S"
+		Return
+	EndIf
+
+	// Posiciona SC5
+	DbSelectArea("SC5")
+	DbSetOrder(1)
+	If !DbSeek(xFilial("SC5") + PadR(cNumPed, TamSX3("C5_NUM")[1]))
+		ConOut("[ORDERS API] ApplyLiberOk: pedido nao encontrado [" + cNumPed + "]")
+		Return
+	EndIf
+
+	// --- Etapa 1: Estorna bloqueios existentes na SC9 por item ---
+	DbSelectArea("SC6")
+	SC6->(DbSetOrder(1)) // C6_FILIAL+C6_NUM+C6_ITEM+C6_PRODUTO
+	SC6->(MsSeek(SC5->C5_FILIAL + SC5->C5_NUM))
+
+	While !SC6->(EoF()) .And. SC6->C6_FILIAL == SC5->C5_FILIAL .And. SC6->C6_NUM == SC5->C5_NUM
+		SC9->(DbSeek(FWxFilial("SC9") + SC6->C6_NUM + SC6->C6_ITEM))
+		While !SC9->(EoF()) .And. SC9->(C9_FILIAL + C9_PEDIDO + C9_ITEM) == FWxFilial("SC9") + SC6->(C6_NUM + C6_ITEM)
+			SC9->(a460Estorna(.T.))
+			SC9->(DbSkip())
+		EndDo
+		SC6->(DbSkip())
+	EndDo
+
+	// --- Etapa 2: Marca C5_LIBEROK = "S" ---
+	DbSelectArea("SC5")
+	DbSetOrder(1)
+	DbSeek(xFilial("SC5") + PadR(cNumPed, TamSX3("C5_NUM")[1]))
+	RecLock("SC5", .F.)
+		SC5->C5_LIBEROK := "S"
+	SC5->(MsUnlock())
+
+	// --- Etapa 3: MaLibDoFat por item (liberacao de credito e estoque) ---
+	DbSelectArea("SC6")
+	SC6->(DbSetOrder(1))
+	SC6->(MsSeek(SC5->C5_FILIAL + SC5->C5_NUM))
+
+	While !SC6->(EoF()) .And. SC6->C6_NUM == SC5->C5_NUM
+		MaLibDoFat(;
+			SC6->(RecNo()),; // nRegSC6
+			SC6->C6_QTDVEN,; // nQtdaLib
+			,;               // lCredito  (branco = sem bloqueio de credito)
+			,;               // lEstoque  (branco = sem bloqueio de estoque)
+			.T.,;            // lAvCred   (avalia credito)
+			.T.,;            // lAvEst    (avalia estoque)
+			.F.,;            // lLibPar   (nao libera parcialmente)
+			.F.;             // lTrfLocal (nao e transferencia local)
+		)
+		SC6->(DbSkip())
+	EndDo
+
+	ConOut("[ORDERS API] Liberacao completa aplicada no pedido: " + AllTrim(cNumPed))
+
+Return
 
 //=============================================================
 // DeleteOrder - Delete existing order with error handling
@@ -1067,7 +1146,7 @@ Static Function DeleteOrder(oSelf, oObj)
 		EndIf
 
 		// Execute MATA410 (Delete = 5)
-		ConOut("[ORDERS API] Deleting order " + AllTrim(cOrderNum) + " - Branch: " + cFilAnt)
+		ConOut("[ORDERS API] Deleting order " + AllTrim(cOrderNum) + " - Branch: " + xFilial("SC5"))
 		lMsErroAuto := .F.
 		MsExecAuto({|w,x,y,z| MATA410(w,x,y,z)}, aDadosC5, aDadosC6, 5, .F.)
 		ConOut("[ORDERS API] MsExecAuto finished (DELETE) - lMsErroAuto: " + cValToChar(lMsErroAuto))
@@ -1650,6 +1729,28 @@ Return
 //=============================================================
 
 //=============================================================
+// GetJsonValue - Safe property getter from JSON object
+//=============================================================
+Static Function GetJsonValue(oObj, cProp)
+
+	Local xValue  := Nil
+	Local bOldErr := Nil
+
+	If oObj == Nil .Or. !(ValType(oObj) $ "OJ")
+		Return Nil
+	EndIf
+
+	bOldErr := ErrorBlock({|e| Break(e)})
+	Begin Sequence
+		xValue := oObj[cProp]
+	Recover
+		xValue := Nil
+	End Sequence
+	ErrorBlock(bOldErr)
+
+Return xValue
+
+//=============================================================
 // GetJsonString - Safe string getter from JSON object
 //=============================================================
 Static Function GetJsonString(oObj, cProp, cDefault)
@@ -1663,7 +1764,7 @@ Static Function GetJsonString(oObj, cProp, cDefault)
 		Return cResult
 	EndIf
 
-	xValue := oObj[cProp]
+	xValue := GetJsonValue(oObj, cProp)
 	If ValType(xValue) == "C"
 		cResult := AllTrim(xValue)
 	ElseIf ValType(xValue) == "N"
@@ -1688,7 +1789,7 @@ Static Function GetJsonNumber(oObj, cProp, nDefault)
 		Return nResult
 	EndIf
 
-	xValue := oObj[cProp]
+	xValue := GetJsonValue(oObj, cProp)
 	If ValType(xValue) == "N"
 		nResult := xValue
 	ElseIf ValType(xValue) == "C"
@@ -1709,7 +1810,7 @@ Static Function GetJsonArray(oObj, cProp)
 		Return aResult
 	EndIf
 
-	xValue := oObj[cProp]
+	xValue := GetJsonValue(oObj, cProp)
 	If ValType(xValue) == "A"
 		aResult := xValue
 	EndIf
@@ -1727,7 +1828,7 @@ Static Function HasJsonProperty(oObj, cProp)
 		Return .F.
 	EndIf
 
-	xValue := oObj[cProp]
+	xValue := GetJsonValue(oObj, cProp)
 
 Return (ValType(xValue) != "U" .And. xValue != Nil)
 
@@ -1947,7 +2048,7 @@ Static Function ArrayToJson(aData)
 			cJson += ","
 		EndIf
 		oItem := aData[nX]
-		If ValType(oItem) == "O"
+		If ValType(oItem) == "O" .Or. ValType(oItem) == "J"
 			cJson += oItem:ToJson()
 		Else
 			cJson += '"' + cValToChar(oItem) + '"'

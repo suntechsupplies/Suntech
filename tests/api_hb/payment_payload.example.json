@@ -1,0 +1,16 @@
+[
+  {
+    "results": [
+      {
+        "transaction_amount": 0.0,
+        "money_release_status": "released",
+        "id": "payment-id",
+        "money_release_date": "2026-01-01T00:00:00Z",
+        "charges_details": [],
+        "transaction_details": {
+          "total_paid_amount": 0.0
+        }
+      }
+    ]
+  }
+]

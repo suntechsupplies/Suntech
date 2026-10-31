@@ -47,7 +47,6 @@ WSMETHOD POST WSSERVICE GetXmlNf
 	Local cMsg      := ""
 	Local nRecnoSF2 := 0
 	Local aRet      := {}
-	Local aTabs     := {"SF2", "SA1"}
 
 	::SetContentType("application/json")
 
@@ -73,11 +72,11 @@ WSMETHOD POST WSSERVICE GetXmlNf
 		Return .F.
 	EndIf
 
-	// Setup environment (igual Orders.prw)
-	RpcSetEnv(_cEmpresa, _cFilial,,,,GetEnvServer(), aTabs)
-	cEmpAnt := _cEmpresa
-	cFilAnt := _cFilial
-	cNumEmp := _cEmpresa + _cFilial
+	If FindFunction("WfPrepEnv")
+		cEmpAnt := _cEmpresa
+		cFilAnt := _cFilial
+		cNumEmp := _cEmpresa + _cFilial
+	EndIf
 
 	// Abertura explicita de SF2: em contextos REST o parametro aTabs do
 	// RpcSetEnv pode nao efetivar a abertura do alias no Select(). Sem
@@ -91,7 +90,7 @@ WSMETHOD POST WSSERVICE GetXmlNf
 		End Sequence
 	EndIf
 
-	// Obter idEnt apos RpcSetEnv para ter contexto correto
+	// Obter idEnt apos preparar o ambiente para ter contexto correto
 	_cIdEnt := IIf(ValType(oReq['idEnt']) == 'U', SuperGetMv("UF_ENTTSS", .F., , _cFilial), AllTrim(cValToChar(oReq['idEnt'])))
 
 	ConOut("[GETXML] Buscando: Doc=[" + cDoc + "] Serie=[" + cSerie + "] Cli=[" + cCliente + "] Loja=[" + cLoja + "] Filial=[" + _cFilial + "]")

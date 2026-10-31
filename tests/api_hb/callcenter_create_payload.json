@@ -1,0 +1,41 @@
+{
+  "empresa": "01",
+  "branch": "01",
+  "rotina": "2",
+  "cabecalho": {
+    "customerCode": "C05863",
+    "customerStore": "01",
+    "operatorCode": "000091",
+    "oparation": "2",
+    "attendanceType": "1",
+    "callType": "1",
+    "paymentCondition": "030",
+    "priceTable": "TTR",
+    "carrierCode": "T00007",
+    "callCode": "000004",
+    "processStatusCode": "000013",
+    "processStatusDescription": "NAO ATENDIDO",
+    "responseCode": "000029",
+    "responseName": "Charles Andrade",
+    "vendorCode": "R00027",
+    "paymentMethod": "BO",
+    "currencyCode": "1",
+    "financialNature": "10411",
+    "orderType": "SA",
+    "isProspect": "N"
+  },
+  "itens": [
+    {
+      "itemNumber": "01",
+      "productCode": "10105380868032",
+      "quantity": "1",
+      "unitPrice": "40.00",
+      "itemOperation": "71",
+      "operationCode": "7Y0",
+      "cfopCode": "6910",
+      "warehouse": "02",
+      "defectCode": "30",
+      "deliveryDate": "20261009"
+    }
+  ]
+}
