@@ -1,12 +1,18 @@
-#Include "prtopdef.ch"
-#Include "TOTVS.CH"
+#INCLUDE 'PROTHEUS.CH'
+#Include 'Totvs.ch'
+#Include 'APWIZARD.CH'
+#include "parmtype.ch"
+#include "RwMake.ch"
+
 
 User Function AtuCampoCSV()
+	Local cModo := ""
 	Local cTabela := ""
 	Local cCampo := ""
 	Local cArquivo := ""
 	Local cLeitura := ""
 	Local cIndice := ""
+	Local cConflito := ""
 	Local aTabelas := {}
 	Local aIndices := {}
 	Local aCampos := {}
@@ -17,6 +23,12 @@ User Function AtuCampoCSV()
 	Local nCampo := 0
 	Local nPosicao := 0
 	Local nAtualizados := 0
+	Local nIncluidos := 0
+	Local nIgnorados := 0
+
+	If !ACVEscolher("Selecione a operacao", "Funcionalidade", {"Atualizar campo", "Importar registros"}, @cModo)
+		Return
+	EndIf
 
 	aTabelas := ACVTabelas()
 	If Len(aTabelas) == 0
@@ -34,16 +46,22 @@ User Function AtuCampoCSV()
 	If !ACVEscolher("Indice da tabela " + cTabela, "Indice (SIX)", aIndices, @cIndice)
 		Return
 	EndIf
-	If !ACVEscolher("Campo da tabela " + cTabela, "Campo (SX3)", aCampos, @cCampo)
-		Return
+	If cModo == "Atualizar campo"
+		If !ACVEscolher("Campo da tabela " + cTabela, "Campo (SX3)", aCampos, @cCampo)
+			Return
+		EndIf
+	Else
+		If !ACVEscolher("Tratamento para chave existente", "Ao encontrar registro", ;
+			{"Ignorar linha", "Atualizar registro existente", "Cancelar importacao"}, @cConflito)
+			Return
+		EndIf
 	EndIf
 	nIndice := Val(cIndice)
 	If !ACVConfig(cTabela, nIndice, cCampo, @aChave, @nCampo, @nPosicao, @cErro)
 		MsgStop(cErro, "Atualizacao CSV")
 		Return
 	EndIf
-	cArquivo := cGetFile("Excel (*.xlsx)|*.xlsx|Excel 97-2003 (*.xls)|*.xls|CSV (*.csv)|*.csv", "Selecione a planilha", 1, "C:\TOTVS\", .T.)
-	If Empty(cArquivo)
+	If !ACVSelecionarArquivo(@cArquivo)
 		Return
 	EndIf
 	If !File(cArquivo) .Or. !(Upper(Right(cArquivo, 4)) == ".XLS" .Or. ;
@@ -59,8 +77,13 @@ User Function AtuCampoCSV()
 			Return
 		EndIf
 	EndIf
-	Processa({|| ACVLer(cLeitura, cTabela, cCampo, aChave, nCampo, .F., @aLinhas, @cErro)}, ;
-		"Validando arquivo", "Conferindo registros...", .F.)
+	If cModo == "Atualizar campo"
+		Processa({|| ACVLer(cLeitura, cTabela, cCampo, aChave, nCampo, .F., @aLinhas, @cErro)}, ;
+			"Validando arquivo", "Conferindo registros...", .F.)
+	Else
+		Processa({|| ACVLerImportacao(cLeitura, cTabela, aChave, .F., @aLinhas, @cErro)}, ;
+			"Validando arquivo", "Conferindo registros...", .F.)
+	EndIf
 	If !Empty(cErro)
 		If cLeitura != cArquivo
 			FErase(cLeitura)
@@ -71,19 +94,37 @@ User Function AtuCampoCSV()
 	If cLeitura != cArquivo
 		FErase(cLeitura)
 	EndIf
-	If !MsgYesNo("Arquivo validado: " + cArquivo + CRLF + ;
-		"Tabela: " + cTabela + " | indice: " + AllTrim(Str(nIndice)) + ;
-		" | campo: " + cCampo + CRLF + "Registros conferidos: " + AllTrim(Str(Len(aLinhas))) + ;
-		CRLF + "Gravacao direta, sem validacoes da rotina padrao. Confirma?", "Atualizacao CSV")
-		Return
-	EndIf
-
-	Processa({|| ACVGravar(cTabela, nIndice, nCampo, aChave, aLinhas, @nAtualizados, @cErro)}, ;
-		"Atualizando registros", "Gravando dados...", .F.)
-	If Empty(cErro)
-		MsgInfo(AllTrim(Str(nAtualizados)) + " registros atualizados.", "Atualizacao CSV")
+	If cModo == "Atualizar campo"
+		If !MsgYesNo("Arquivo validado: " + cArquivo + CRLF + ;
+			"Tabela: " + cTabela + " | indice: " + AllTrim(Str(nIndice)) + ;
+			" | campo: " + cCampo + CRLF + "Registros conferidos: " + AllTrim(Str(Len(aLinhas))) + ;
+			CRLF + "Gravacao direta, sem validacoes da rotina padrao. Confirma?", "Atualizacao CSV")
+			Return
+		EndIf
+		Processa({|| ACVGravar(cTabela, nIndice, nCampo, aChave, aLinhas, @nAtualizados, @cErro)}, ;
+			"Atualizando registros", "Gravando dados...", .F.)
+		If Empty(cErro)
+			MsgInfo(AllTrim(Str(nAtualizados)) + " registros atualizados.", "Atualizacao CSV")
+		Else
+			MsgStop(cErro + ". Transacao cancelada.", "Atualizacao CSV")
+		EndIf
 	Else
-		MsgStop(cErro + ". Transacao cancelada.", "Atualizacao CSV")
+		If !MsgYesNo("Arquivo validado: " + cArquivo + CRLF + ;
+			"Tabela: " + cTabela + " | indice: " + AllTrim(Str(nIndice)) + CRLF + ;
+			"Registros conferidos: " + AllTrim(Str(Len(aLinhas))) + CRLF + ;
+			"Duplicidade: " + cConflito + CRLF + ;
+			"Importacao direta, sem validacoes da rotina padrao. Confirma?", "Importacao CSV")
+			Return
+		EndIf
+		Processa({|| ACVGravarImportacao(cTabela, nIndice, aChave, aLinhas, cConflito, ;
+			@nIncluidos, @nAtualizados, @nIgnorados, @cErro)}, ;
+			"Importando registros", "Gravando dados...", .F.)
+		If Empty(cErro)
+			MsgInfo(AllTrim(Str(nIncluidos)) + " incluidos, " + AllTrim(Str(nAtualizados)) + ;
+				" atualizados e " + AllTrim(Str(nIgnorados)) + " ignorados.", "Importacao CSV")
+		Else
+			MsgStop(cErro + ". Transacao cancelada.", "Importacao CSV")
+		EndIf
 	EndIf
 
 Return
@@ -96,7 +137,7 @@ Static Function ACVGravar(cTabela, nIndice, nCampo, aChave, aLinhas, nAtualizado
 	ProcRegua(Len(aLinhas))
 	Begin Transaction
 		For nPosicao := 1 To Len(aLinhas)
-			If !ACVBuscaUnica(aLinhas[nPosicao, 1], aChave)
+			If ACVBuscaStatus(aLinhas[nPosicao, 1], aChave) != 1
 				cErro := "Chave ausente ou duplicada na linha " + AllTrim(Str(nPosicao + 1))
 				DisarmTransaction()
 				Exit
@@ -110,6 +151,65 @@ Static Function ACVGravar(cTabela, nIndice, nCampo, aChave, aLinhas, nAtualizado
 			MsUnlock()
 			nAtualizados++
 			IncProc("Gravando registro " + AllTrim(Str(nPosicao)) + " de " + AllTrim(Str(Len(aLinhas))))
+		Next
+	End Transaction
+	Return
+
+Static Function ACVGravarImportacao(cTabela, nIndice, aChave, aLinhas, cConflito, ;
+	nIncluidos, nAtualizados, nIgnorados, cErro)
+	Local nPosicao := 0
+	Local nStatus := 0
+	Local nValor := 0
+	Local nCampo := 0
+	Local aValores := {}
+
+	DbSelectArea(cTabela)
+	DbSetOrder(nIndice)
+	ProcRegua(Len(aLinhas))
+	Begin Transaction
+		For nPosicao := 1 To Len(aLinhas)
+			nStatus := ACVBuscaStatus(aLinhas[nPosicao, 1], aChave)
+			If nStatus == 2
+				cErro := "Chave duplicada na tabela na linha " + AllTrim(Str(nPosicao + 1))
+				DisarmTransaction()
+				Exit
+			EndIf
+			If nStatus == 1 .And. cConflito == "Cancelar importacao"
+				cErro := "Registro ja existente na linha " + AllTrim(Str(nPosicao + 1))
+				DisarmTransaction()
+				Exit
+			EndIf
+			If nStatus == 1 .And. cConflito == "Ignorar linha"
+				nIgnorados++
+			Else
+				If nStatus == 1
+					If !RecLock(cTabela, .F.)
+						cErro := "Falha ao bloquear o registro da linha " + AllTrim(Str(nPosicao + 1))
+						DisarmTransaction()
+						Exit
+					EndIf
+				Else
+					If !RecLock(cTabela, .T.)
+						cErro := "Falha ao incluir o registro da linha " + AllTrim(Str(nPosicao + 1))
+						DisarmTransaction()
+						Exit
+					EndIf
+				EndIf
+				aValores := aLinhas[nPosicao, 2]
+				For nValor := 1 To Len(aValores)
+					nCampo := aValores[nValor, 1]
+					If nStatus == 0 .Or. AScan(aChave, FieldName(nCampo)) == 0
+						FieldPut(nCampo, aValores[nValor, 2])
+					EndIf
+				Next
+				MsUnlock()
+				If nStatus == 1
+					nAtualizados++
+				Else
+					nIncluidos++
+				EndIf
+			EndIf
+			IncProc("Importando registro " + AllTrim(Str(nPosicao)) + " de " + AllTrim(Str(Len(aLinhas))))
 		Next
 	End Transaction
 	Return
@@ -166,6 +266,49 @@ Static Function ACVEscolher(cTitulo, cRotulo, aOpcoes, cEscolha)
 	@ 058, 160 Button "Cancelar" Size 65, 14 Of oDlg Pixel Action oDlg:End()
 	Activate MsDialog oDlg Centered
 	Return lConfirmado
+
+Static Function ACVSelecionarArquivo(cArquivo)
+	Local oWizard := Nil
+	Local oGetArquivo := Nil
+	Local lConfirmado := .F.
+	Local cHeader := "Selecao da planilha"
+	Local cMessage := "Selecione o arquivo para atualizacao/importacao."
+	Local cText := "Informe um arquivo XLS, XLSX ou CSV acessivel ao AppServer."
+	Private cACVFileImp := Space(255)
+
+	Define Wizard oWizard ;
+		Title "Selecione a planilha" ;
+		Header cHeader ;
+		Message cMessage ;
+		Text cText ;
+		Next {|| .T.} ;
+		Finish {|| .F.}
+
+	Create Panel oWizard ;
+		Header cHeader ;
+		Message cMessage ;
+		Back {|| .F.} ;
+		Next {|| !Empty(AllTrim(cACVFileImp)) .And. File(AllTrim(cACVFileImp))} ;
+		Finish {|| .F.}
+
+	@ 085, 005 Group To 113, 245 Prompt "Arquivo XLS, XLSX ou CSV:" Of oWizard:oMPanel[2] Pixel
+	@ 095, 020 MsGet oGetArquivo Var cACVFileImp ;
+		Valid(If(File(AllTrim(cACVFileImp)), .T., ;
+			(Alert("O arquivo informado nao existe no AppServer."), .F.))) ;
+		Size 212, 010 Of oWizard:oMPanel[2] F3 "DIR" Pixel
+
+	Create Panel oWizard ;
+		Header cHeader ;
+		Message "Confirme o arquivo selecionado." ;
+		Back {|| .T.} ;
+		Next {|| .F.} ;
+		Finish {|| lConfirmado := .T.}
+
+	@ 020, 010 Say "Arquivo selecionado. Clique em Concluir." Of oWizard:oMPanel[3] Pixel
+
+	Activate Wizard oWizard Centered
+	cArquivo := AllTrim(cACVFileImp)
+	Return lConfirmado .And. !Empty(cArquivo)
 
 Static Function ACVConverter(cArquivo, cCSV, cErro)
 	Local cDrive := ""
@@ -283,6 +426,9 @@ Static Function ACVConfig(cTabela, nIndice, cCampo, aChave, nCampo, nPosicao, cE
 			Return .F.
 		EndIf
 	Next
+	If Empty(cCampo)
+		Return .T.
+	EndIf
 	nCampo := FieldPos(cCampo)
 	If nCampo == 0
 		cErro := "Campo de destino nao encontrado na tabela."
@@ -297,6 +443,153 @@ Static Function ACVConfig(cTabela, nIndice, cCampo, aChave, nCampo, nPosicao, cE
 		Return .F.
 	EndIf
 	Return .T.
+
+Static Function ACVLerImportacao(cArquivo, cTabela, aChave, lUTF8, aLinhas, cErro)
+	Local aCabecalho := {}
+	Local aMapeamento := {}
+	Local aColunas := {}
+	Local aValores := {}
+	Local aVistas := {}
+	Local aEstrutura := {}
+	Local cLinha := ""
+	Local cChave := ""
+	Local cTexto := ""
+	Local nLinha := 0
+	Local nColuna := 0
+	Local nParte := 0
+	Local nCampo := 0
+	Local nFilial := 0
+	Local nColFilial := 0
+	Local xValor := Nil
+
+	If !File(cArquivo) .Or. Upper(Right(cArquivo, 4)) != ".CSV"
+		cErro := "Selecione um arquivo CSV acessivel pelo AppServer."
+		Return .F.
+	EndIf
+	If FT_FUSE(cArquivo) < 0
+		cErro := "Nao foi possivel abrir o CSV."
+		Return .F.
+	EndIf
+	FT_FGOTOP()
+	DbSelectArea(cTabela)
+	aEstrutura := DbStruct()
+	nFilial := FieldPos(aChave[1])
+	ProcRegua(FT_FLASTREC())
+	While !FT_FEOF()
+		nLinha++
+		IncProc("Validando linha " + AllTrim(Str(nLinha)))
+		cLinha := FT_FREADLN()
+		If Len(cLinha) >= 1022
+			cErro := "Linha excede o limite do leitor de texto: " + AllTrim(Str(nLinha))
+			Exit
+		EndIf
+		If nLinha == 1 .And. Left(cLinha, 3) == Chr(239) + Chr(187) + Chr(191)
+			cLinha := SubStr(cLinha, 4)
+			lUTF8 := .T.
+		EndIf
+		If lUTF8
+			cLinha := StrIConv(cLinha, "UTF-8", "CP1252")
+			If ValType(cLinha) != "C" .Or. Empty(cLinha)
+				cErro := "Falha ao converter UTF-8 na linha " + AllTrim(Str(nLinha))
+				Exit
+			EndIf
+		EndIf
+		aColunas := ACVColunas(cLinha)
+		If Len(aColunas) == 0
+			cErro := "CSV invalido na linha " + AllTrim(Str(nLinha))
+			Exit
+		EndIf
+		If nLinha == 1
+			For nColuna := 1 To Len(aColunas)
+				AAdd(aCabecalho, Upper(AllTrim(aColunas[nColuna])))
+			Next
+			For nColuna := 1 To Len(aCabecalho)
+				nCampo := FieldPos(aCabecalho[nColuna])
+				If nCampo == 0 .Or. AScan(aCabecalho, aCabecalho[nColuna]) < nColuna .Or. ;
+					aCabecalho[nColuna] == "D_E_L_E_T_" .Or. aCabecalho[nColuna] == "R_E_C_N_O_" .Or. ;
+					aCabecalho[nColuna] == "R_E_C_D_E_L_"
+					cErro := "Campo invalido ou repetido no cabecalho: " + aCabecalho[nColuna]
+					Exit
+				EndIf
+				If !(aEstrutura[nCampo, 2] $ "CNDL")
+					cErro := "Tipo nao suportado para importacao: " + aCabecalho[nColuna]
+					Exit
+				EndIf
+				AAdd(aMapeamento, nCampo)
+			Next
+			If !Empty(cErro)
+				Exit
+			EndIf
+			nColFilial := AScan(aCabecalho, aChave[1])
+			For nParte := 2 To Len(aChave)
+				If AScan(aCabecalho, aChave[nParte]) == 0
+					cErro := "Coluna de chave ausente: " + aChave[nParte]
+					Exit
+				EndIf
+			Next
+			If !Empty(cErro)
+				Exit
+			EndIf
+		Else
+			If Len(aColunas) != Len(aCabecalho)
+				cErro := "Numero de colunas incorreto na linha " + AllTrim(Str(nLinha))
+				Exit
+			EndIf
+			aValores := {}
+			For nColuna := 1 To Len(aColunas)
+				nCampo := aMapeamento[nColuna]
+				cTexto := aColunas[nColuna]
+				If nCampo == nFilial
+					cTexto := StrTran(cTexto, Chr(160), " ")
+					If !Empty(AllTrim(xFilial(cTabela))) .And. !Empty(AllTrim(cTexto)) .And. ;
+						AllTrim(cTexto) != AllTrim(xFilial(cTabela))
+						cErro := "Filial diferente da filial atual na linha " + AllTrim(Str(nLinha))
+						Exit
+					EndIf
+					cTexto := xFilial(cTabela)
+				ElseIf AScan(aChave, aCabecalho[nColuna]) > 0
+					cTexto := StrTran(cTexto, Chr(160), " ")
+				EndIf
+				If !ACVValor(cTexto, aEstrutura[nCampo], @xValor)
+					cErro := "Valor invalido para " + aCabecalho[nColuna] + " na linha " + AllTrim(Str(nLinha))
+					Exit
+				EndIf
+			AAdd(aValores, {nCampo, xValor})
+			Next
+			If !Empty(cErro)
+				Exit
+			EndIf
+			If nColFilial == 0
+				AAdd(aValores, {nFilial, xFilial(cTabela)})
+			EndIf
+			cChave := xFilial(cTabela)
+			For nParte := 2 To Len(aChave)
+				nColuna := AScan(aCabecalho, aChave[nParte])
+				nCampo := FieldPos(aChave[nParte])
+				cTexto := AllTrim(StrTran(aColunas[nColuna], Chr(160), " "))
+				If Empty(cTexto) .Or. Len(cTexto) > aEstrutura[nCampo, 3]
+					cErro := "Chave vazia ou longa na linha " + AllTrim(Str(nLinha))
+					Exit
+				EndIf
+				cChave += PadR(cTexto, aEstrutura[nCampo, 3])
+			Next
+			If !Empty(cErro)
+				Exit
+			EndIf
+			If AScan(aVistas, cChave) > 0
+				cErro := "Chave repetida no CSV na linha " + AllTrim(Str(nLinha))
+				Exit
+			EndIf
+			AAdd(aVistas, cChave)
+			AAdd(aLinhas, {cChave, aValores})
+		EndIf
+		FT_FSKIP()
+	EndDo
+	FT_FUSE()
+	If Empty(cErro) .And. Len(aLinhas) == 0
+		cErro := "CSV sem registros para importar."
+	EndIf
+	Return Empty(cErro)
 
 Static Function ACVLer(cArquivo, cTabela, cCampo, aChave, nCampo, lUTF8, aLinhas, cErro)
 	Local aCabecalho := {}
@@ -369,8 +662,9 @@ Static Function ACVLer(cArquivo, cTabela, cCampo, aChave, nCampo, lUTF8, aLinhas
 				cErro := "Numero de colunas incorreto na linha " + AllTrim(Str(nLinha))
 				Exit
 			EndIf
-			If nColFilial > 0 .And. !Empty(AllTrim(aColunas[nColFilial]))
-				If AllTrim(aColunas[nColFilial]) != AllTrim(xFilial(cTabela))
+			If nColFilial > 0 .And. !Empty(AllTrim(xFilial(cTabela))) .And. ;
+				!Empty(AllTrim(aColunas[nColFilial]))
+				If AllTrim(StrTran(aColunas[nColFilial], Chr(160), " ")) != AllTrim(xFilial(cTabela))
 					cErro := "Filial diferente da filial atual na linha " + AllTrim(Str(nLinha))
 					Exit
 				EndIf
@@ -420,17 +714,22 @@ Static Function ACVLer(cArquivo, cTabela, cCampo, aChave, nCampo, lUTF8, aLinhas
 	Return Empty(cErro)
 
 Static Function ACVBuscaUnica(cChave, aChave)
+	Return ACVBuscaStatus(cChave, aChave) == 1
+
+Static Function ACVBuscaStatus(cChave, aChave)
 	If !DbSeek(cChave)
-		Return .F.
+		Return 0
 	EndIf
 	If ACVChaveAtual(aChave) != cChave
-		Return .F.
+		Return 0
 	EndIf
 	DbSkip()
 	If !Eof() .And. ACVChaveAtual(aChave) == cChave
-		Return .F.
+		DbSeek(cChave)
+		Return 2
 	EndIf
-	Return DbSeek(cChave)
+	DbSeek(cChave)
+	Return 1
 
 Static Function ACVChaveAtual(aChave)
 	Local cAtual := ""
