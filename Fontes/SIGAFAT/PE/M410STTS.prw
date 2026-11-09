@@ -19,7 +19,7 @@
 ---------------------------------------------------------------------------------------------*/
 user function M410STTS()
 
-	Local _nOper 		 := PARAMIXB[1]
+	Local _nOper 		 := 0
 	Local _cFilial		 := ""
 	Local _cPedido		 := ""
     Local oQueueError   := Nil
@@ -27,6 +27,20 @@ user function M410STTS()
     Local aAreaC5   	 := SC5->(GetArea())
     Local aAreaC6   	 := SC6->(GetArea())
     Local aAreaC9   	 := SC9->(GetArea())
+
+	If ValType(PARAMIXB) != "A"
+		ConOut("[M410STTS] PARAMIXB invalido; tipo=" + ValType(PARAMIXB))
+		Return
+	EndIf
+	If Len(PARAMIXB) < 1
+		ConOut("[M410STTS] PARAMIXB sem parametro de operacao.")
+		Return
+	EndIf
+	If ValType(PARAMIXB[1]) != "N"
+		ConOut("[M410STTS] Operacao invalida; tipo=" + ValType(PARAMIXB[1]))
+		Return
+	EndIf
+	_nOper := PARAMIXB[1]
 
 	/*******************************************
 	3 - Inclusão
