@@ -75,7 +75,7 @@ User Function ZMOST()
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261109-03")
+		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261109-04")
 		cEtapa := "DIMENSIONAR"
 		aSize := MsAdvSize()
 		If ValType(aSize) != "A"
@@ -127,7 +127,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261109-03")
+		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261109-04")
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
 		aFiltro := ZMFilters()
 		cContexto := "Empresa " + cEmpAnt + " | Filial " + cFilAnt + " | SIMULACAO"
@@ -200,7 +200,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		ConOut("[ZMOST][TELA] TCBrowse configurado com colunas explicitas")
 		cEtapa := "GRADE_PRONTA"
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
-		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261109-03")
+		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261109-04")
 	Recover Using oError
 		cErro := "Etapa " + cEtapa + ": " + ZMError(oError)
 		ConOut("[ZMOST][TELA] Falha: " + cErro)
@@ -924,21 +924,21 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 	Define MsDialog oDlg Title "Acompanhamento da renovacao" From 0, 0 To 265, 660 Pixel
 	@ 8, 8 Say oSay Prompt "1. Validacao: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 25, 8 Say oSay Prompt "2. Entrada MATA103: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 22, 8 Say oSay Prompt "2. Entrada MATA103: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 42, 8 Say oSay Prompt "3. Conferencia SF1/SD1: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 36, 8 Say oSay Prompt "3. Conferencia SF1/SD1: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 59, 8 Say oSay Prompt "4. Pedido MATA410: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 50, 8 Say oSay Prompt "4. Pedido MATA410: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 76, 8 Say oSay Prompt "5. Conferencia SC5/SC6: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 64, 8 Say oSay Prompt "5. Conferencia SC5/SC6: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 93, 8 Say oSay Prompt "6. Liberacao MaLibDoFat/SC9: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 78, 8 Say oSay Prompt "6. Liberacao MaLibDoFat/SC9: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 110, 8 Say oSay Prompt "7. Faturamento MATA461: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 92, 8 Say oSay Prompt "7. Faturamento MATA461: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 127, 8 Say oSay Prompt "8. Conferencia SF2/SD2: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 106, 8 Say oSay Prompt "8. Conferencia SF2/SD2: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 145, 8 Say oSay Prompt "Acompanhamento desta sessao; autorizacao/transmissao pelo AUTONFE padrao." Size 620, 24 Of oDlg Pixel
+	@ 122, 8 Say oSay Prompt "Acompanhamento desta sessao; autorizacao/transmissao pelo AUTONFE padrao." Size 620, 24 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
 	@ 230, 565 Button oButton Prompt "Fechar" Size 65, 15 Of oDlg Pixel Action oDlg:End() When !aState[3]
 	aState[3] := .T.
@@ -1468,7 +1468,7 @@ Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSer
 		EndIf
 		ZMStage(aEtapas, 7, "[OK] MATA461 retornou o documento " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ".", oDlg)
 		ZMStage(aEtapas, 8, "[EM ANDAMENTO] Conferindo SF2/SD2.", oDlg)
-		If !ZMInvOK(cPedidoNovo, cDocSaida, cSerieSaida, cCliente, cLoja, aState, aSelecionados)
+		If !ZMInvOK(cPedidoNovo, cDocSaida, cSerieSaida, cCliente, cLoja, aState, aSelecionados, aEtapas, oDlg)
 			Break("MATA461 retornou " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ", mas SF2/SD2 nao confirmaram todos os itens. Nao repita antes de reconciliar.")
 		EndIf
 		aResultado[6] := cDocSaida
@@ -2126,7 +2126,7 @@ Static Function ZMInvoice(cPedido, cSerie, dEntrega)
 
 Return {cDoc, cErro}
 
-Static Function ZMInvOK(cPedido, cDoc, cSerie, cCliente, cLoja, aState, aSelecionados)
+Static Function ZMInvOK(cPedido, cDoc, cSerie, cCliente, cLoja, aState, aSelecionados, aEtapas, oDlg)
 
 	Local aRows := {}
 	Local aOrder := {}
@@ -2137,41 +2137,60 @@ Static Function ZMInvOK(cPedido, cDoc, cSerie, cCliente, cLoja, aState, aSelecio
 	Local nPos := 0
 
 	If Empty(cDoc) .Or. Empty(cSerie) .Or. Len(aSelecionados) == 0
+		ConOut("[ZMOST][PROCESSO] ZMInvOK entrada invalida")
 		Return .F.
 	EndIf
+	ZMStage(aEtapas, 8, "[EM ANDAMENTO] Conferindo cabecalho SF2.", oDlg)
 	cQuery := "SELECT F2_CLIENTE, F2_LOJA FROM " + RetSqlName("SF2")
 	cQuery += " WHERE F2_FILIAL = " + ZMSql(xFilial("SF2")) + " AND F2_DOC = " + ZMSql(cDoc)
 	cQuery += " AND F2_SERIE = " + ZMSql(cSerie) + " AND F2_CLIENTE = " + ZMSql(cCliente)
 	cQuery += " AND F2_LOJA = " + ZMSql(cLoja) + " AND D_E_L_E_T_ = ' '
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SF2 antes; doc=" + AllTrim(cDoc) + "/" + AllTrim(cSerie))
 	aRows := ZMRows(cQuery)
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SF2 depois; registros=" + cValToChar(Len(aRows)))
 	If Len(aRows) != 1
+		ConOut("[ZMOST][PROCESSO] ZMInvOK SF2 cardinalidade divergente")
 		Return .F.
 	EndIf
 	If AllTrim(aRows[1, 1]) != AllTrim(cCliente) .Or. AllTrim(aRows[1, 2]) != AllTrim(cLoja)
+		ConOut("[ZMOST][PROCESSO] ZMInvOK SF2 cliente/loja divergente")
 		Return .F.
 	EndIf
+	ZMStage(aEtapas, 8, "[EM ANDAMENTO] Conferindo vinculo do pedido SC5.", oDlg)
 	cQuery := "SELECT C5_NOTA FROM " + RetSqlName("SC5") + " WHERE C5_FILIAL = " + ZMSql(xFilial("SC5"))
 	cQuery += " AND C5_NUM = " + ZMSql(cPedido) + " AND D_E_L_E_T_ = ' '
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SC5 antes; pedido=" + AllTrim(cPedido))
 	aRows := ZMRows(cQuery)
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SC5 depois; registros=" + cValToChar(Len(aRows)))
 	If Len(aRows) != 1
+		ConOut("[ZMOST][PROCESSO] ZMInvOK SC5 cardinalidade divergente")
 		Return .F.
 	EndIf
 	If AllTrim(aRows[1, 1]) != AllTrim(cDoc)
+		ConOut("[ZMOST][PROCESSO] ZMInvOK SC5 nota divergente; nota=" + AllTrim(aRows[1, 1]))
 		Return .F.
 	EndIf
+	ZMStage(aEtapas, 8, "[EM ANDAMENTO] Conferindo itens do pedido SC6.", oDlg)
 	cQuery := "SELECT C6_ITEM, C6_PRODUTO, C6_QTDVEN FROM " + RetSqlName("SC6")
 	cQuery += " WHERE C6_FILIAL = " + ZMSql(xFilial("SC6")) + " AND C6_NUM = " + ZMSql(cPedido)
 	cQuery += " AND D_E_L_E_T_ = ' ' ORDER BY C6_ITEM"
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SC6 antes; pedido=" + AllTrim(cPedido))
 	aOrder := ZMRows(cQuery)
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SC6 depois; registros=" + cValToChar(Len(aOrder)) + "; esperado=" + cValToChar(Len(aSelecionados)))
 	If Len(aOrder) != Len(aSelecionados)
+		ConOut("[ZMOST][PROCESSO] ZMInvOK SC6 quantidade divergente")
 		Return .F.
 	EndIf
+	ZMStage(aEtapas, 8, "[EM ANDAMENTO] Conferindo itens faturados SD2.", oDlg)
 	cQuery := "SELECT D2_ITEMPV, D2_COD, D2_QUANT FROM " + RetSqlName("SD2")
 	cQuery += " WHERE D2_FILIAL = " + ZMSql(xFilial("SD2")) + " AND D2_DOC = " + ZMSql(cDoc)
 	cQuery += " AND D2_SERIE = " + ZMSql(cSerie) + " AND D2_CLIENTE = " + ZMSql(cCliente)
 	cQuery += " AND D2_LOJA = " + ZMSql(cLoja) + " AND D2_PEDIDO = " + ZMSql(cPedido) + " AND D_E_L_E_T_ = ' '
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SD2 antes; doc=" + AllTrim(cDoc) + "/" + AllTrim(cSerie) + "; pedido=" + AllTrim(cPedido))
 	aRows := ZMRows(cQuery)
+	ConOut("[ZMOST][PROCESSO] ZMInvOK SD2 depois; registros=" + cValToChar(Len(aRows)))
 	If Len(aRows) == 0
+		ConOut("[ZMOST][PROCESSO] ZMInvOK SD2 sem itens")
 		Return .F.
 	EndIf
 	AFill(aQuant, 0)
@@ -2181,18 +2200,22 @@ Static Function ZMInvOK(cPedido, cDoc, cSerie, cCliente, cLoja, aState, aSelecio
 	For nItem := 1 To Len(aRows)
 		nPos := AScan(aOrder, {|aItem| AllTrim(aItem[1]) == AllTrim(aRows[nItem, 1]) .And. AllTrim(aItem[2]) == AllTrim(aRows[nItem, 2])})
 		If nPos == 0
+			ConOut("[ZMOST][PROCESSO] ZMInvOK SD2 item sem SC6 correspondente; itemPedido=" + AllTrim(aRows[nItem, 1]) + "; produto=" + AllTrim(aRows[nItem, 2]))
 			Return .F.
 		EndIf
 		aQuant[nPos] += aRows[nItem, 3]
 	Next nItem
+	ZMStage(aEtapas, 8, "[EM ANDAMENTO] Conciliando quantidades e produtos SC6/SD2.", oDlg)
 	For nItem := 1 To Len(aOrder)
 		aLinha := aState[1, aSelecionados[nItem]]
 		If AllTrim(aOrder[nItem, 2]) != AllTrim(aLinha[ZM_PROD]) .Or. ;
 			Abs(aOrder[nItem, 3] - aLinha[ZM_QTSEL]) > 0.000001 .Or. ;
 			Abs(aQuant[nItem] - aOrder[nItem, 3]) > 0.000001
+			ConOut("[ZMOST][PROCESSO] ZMInvOK SC6/SD2 divergente; item=" + AllTrim(aOrder[nItem, 1]) + "; produto=" + AllTrim(aOrder[nItem, 2]) + "; qtdPedido=" + cValToChar(aOrder[nItem, 3]) + "; qtdSelecionada=" + cValToChar(aLinha[ZM_QTSEL]) + "; qtdFaturada=" + cValToChar(aQuant[nItem]))
 			Return .F.
 		EndIf
 	Next nItem
+	ConOut("[ZMOST][PROCESSO] ZMInvOK validacao concluida; pedido=" + AllTrim(cPedido) + "; documento=" + AllTrim(cDoc) + "; itens=" + cValToChar(Len(aSelecionados)))
 
 Return .T.
 
