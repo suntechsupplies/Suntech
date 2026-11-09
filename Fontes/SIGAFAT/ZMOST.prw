@@ -75,7 +75,7 @@ User Function ZMOST()
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261109-04")
+		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261109-05")
 		cEtapa := "DIMENSIONAR"
 		aSize := MsAdvSize()
 		If ValType(aSize) != "A"
@@ -127,7 +127,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261109-04")
+		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261109-05")
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
 		aFiltro := ZMFilters()
 		cContexto := "Empresa " + cEmpAnt + " | Filial " + cFilAnt + " | SIMULACAO"
@@ -200,7 +200,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		ConOut("[ZMOST][TELA] TCBrowse configurado com colunas explicitas")
 		cEtapa := "GRADE_PRONTA"
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
-		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261109-04")
+		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261109-05")
 	Recover Using oError
 		cErro := "Etapa " + cEtapa + ": " + ZMError(oError)
 		ConOut("[ZMOST][TELA] Falha: " + cErro)
@@ -816,6 +816,7 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 	Local cSerieSaida := ""
 	Local cModo := ""
 	Local dEntrega := Date()
+	Local lIniciado := .F.
 	Local nGrupo := 0
 	Local nItens := 0
 	Local lVendaPendente := .F.
@@ -940,9 +941,10 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 	aAdd(aEtapas, oSay)
 	@ 122, 8 Say oSay Prompt "Acompanhamento desta sessao; autorizacao/transmissao pelo AUTONFE padrao." Size 620, 24 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 230, 565 Button oButton Prompt "Fechar" Size 65, 15 Of oDlg Pixel Action oDlg:End() When !aState[3]
+	@ 230, 475 Button oButton Prompt "Executar" Size 75, 15 Of oDlg Pixel Action (lIniciado := .T., ZMRunBatch(aState, aGrupos, aEtapas, oDlg, @aResultado, cSerieSaida, dEntrega), aState[3] := .F.) When !lIniciado
+	@ 230, 565 Button oButton Prompt "Fechar" Size 65, 15 Of oDlg Pixel Action oDlg:End() When !lIniciado .Or. !aState[3]
 	aState[3] := .T.
-	Activate MsDialog oDlg Centered On Init ZMRunBatch(aState, aGrupos, aEtapas, oDlg, @aResultado, cSerieSaida, dEntrega)
+	Activate MsDialog oDlg Centered
 	aState[3] := .F.
 	If aResultado[5] .And. Len(aState[2]) == 10
 		ZMLoad(AClone(aState[2]), aState, oBrowse, oResumo)
@@ -1471,6 +1473,7 @@ Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSer
 		If !ZMInvOK(cPedidoNovo, cDocSaida, cSerieSaida, cCliente, cLoja, aState, aSelecionados, aEtapas, oDlg)
 			Break("MATA461 retornou " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ", mas SF2/SD2 nao confirmaram todos os itens. Nao repita antes de reconciliar.")
 		EndIf
+		ConOut("[ZMOST][PROCESSO] ZMInvOK retornou sucesso; pedido=" + AllTrim(cPedidoNovo) + "; documento=" + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida))
 		aResultado[6] := cDocSaida
 		ZMStage(aEtapas, 8, "[OK] SF2/SD2 confirmadas para " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ".", oDlg)
 		aResultado[1] := .T.
