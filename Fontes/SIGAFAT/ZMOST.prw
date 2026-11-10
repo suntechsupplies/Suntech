@@ -75,7 +75,7 @@ User Function ZMOST()
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261110-12")
+		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261110-13")
 		cEtapa := "DIMENSIONAR"
 		aSize := MsAdvSize()
 		If ValType(aSize) != "A"
@@ -127,7 +127,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261110-12")
+		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261110-13")
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
 		aFiltro := ZMFilters()
 		cContexto := "Empresa " + cEmpAnt + " | Filial " + cFilAnt + " | SIMULACAO"
@@ -195,9 +195,13 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		oBrowse:bHeaderClick := {|oObj, nCol| ZMInvHeader(aState, oBrowse, oResumo, nCol)}
 		oBrowse:bLDblClick := {|| ZMInvBrowseDblClick(aState, oBrowse, oResumo)}
 		ConOut("[ZMOST][TELA] TCBrowse configurado com colunas explicitas")
+		oBrowse:lVScroll := .T.
+		oBrowse:lHScroll := .T.
 		cEtapa := "GRADE_PRONTA"
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
-		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261110-12")
+		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261110-13")
+		ConOut("[ZMOST][CONSULTA] Carga inicial ao abrir")
+		ZMLoad(aFiltro, aState, oBrowse, oResumo)
 	Recover Using oError
 		cErro := "Etapa " + cEtapa + ": " + ZMError(oError)
 		ConOut("[ZMOST][TELA] Falha: " + cErro)
