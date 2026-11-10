@@ -75,7 +75,7 @@ User Function ZMOST()
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261110-15")
+		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261110-16")
 		cEtapa := "DIMENSIONAR"
 		aSize := MsAdvSize()
 		If ValType(aSize) != "A"
@@ -127,7 +127,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261110-15")
+		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261110-16")
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
 		aFiltro := ZMFilters()
 		cContexto := "Empresa " + cEmpAnt + " | Filial " + cFilAnt + " | SIMULACAO"
@@ -200,7 +200,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		oBrowse:lHScroll := .T.
 		cEtapa := "GRADE_PRONTA"
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
-		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261110-15")
+		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261110-16")
 		ConOut("[ZMOST][CONSULTA] Carga inicial ao abrir")
 		ZMLoad(aFiltro, aState, oBrowse, oResumo)
 	Recover Using oError
@@ -897,7 +897,8 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 	Activate MsDialog oDlg Centered On Init ZMRunBatch(aState, aGrupos, aEtapas, oDlg, @aResultado, cSerieSaida, dEntrega)
 	ConOut("[ZMOST][PROCESSO] Acompanhamento fechado")
 	aState[3] := .F.
-	If aResultado[5] .And. Len(aState[2]) == 10
+	If Len(aState[2]) == 10
+		ConOut("[ZMOST][CONSULTA] Recarregando grid ao fechar acompanhamento; filtros mantidos.")
 		ZMLoad(AClone(aState[2]), aState, oBrowse, oResumo)
 	EndIf
 	If !Empty(cErro)
@@ -1042,13 +1043,17 @@ Static Function ZMOrdComp(aState, aSelecionados)
 		If Len(aRows) != 1
 			Return "Pedido original inexistente ou ambiguo: " + cPedido
 		EndIf
+		If ValType(aRows[1, 6]) == "N" .And. aRows[1, 6] == 0
+			aRows[1, 6] := 1
+			ConOut("[ZMOST][PROCESSO] ZMOrdComp; pedido=" + cPedido + "; C5_MOEDA=0 normalizada para 1.")
+		EndIf
 		If Empty(aCabBase)
 			aCabBase := AClone(aRows[1])
 		Else
 			For nCampo := 1 To Len(aCabBase)
 				If AllTrim(cValToChar(aCabBase[nCampo])) != AllTrim(cValToChar(aRows[1, nCampo]))
 					ConOut("[ZMOST][PROCESSO] ZMOrdComp divergencia; pedido=" + cPedido + "; campo=" + aCamposComp[nCampo] + "; base=" + AllTrim(cValToChar(aCabBase[nCampo])) + "; atual=" + AllTrim(cValToChar(aRows[1, nCampo])))
-					Return "Pedidos originais com condicoes comerciais diferentes; consolide nota a nota."
+					Return "Pedidos " + aPedidos[1] + " e " + cPedido + " divergem em " + aCamposComp[nCampo] + ": " + AllTrim(cValToChar(aCabBase[nCampo])) + " / " + AllTrim(cValToChar(aRows[1, nCampo])) + ". Processe nota a nota."
 				EndIf
 			Next nCampo
 		EndIf
@@ -1129,7 +1134,7 @@ Static Function ZMRunBatch(aState, aGrupos, aEtapas, oDlg, aResultado, cSerieSai
 	aState[3] := .F.
 	If Empty(cErro)
 		aResultado[1] := .T.
-		aResultado[2] := "Concluidos " + cValToChar(nConcluidos) + " lote(s). " + AllTrim(aEtapa[2])
+		aResultado[2] := "Concluidos " + cValToChar(nConcluidos) + " lote(s): " + cValToChar(nConcluidos) + " pedido(s) e " + cValToChar(nConcluidos) + " NF(s) de saida. Autorizacao/transmissao pelo AUTONFE padrao."
 	Else
 		aResultado[1] := .F.
 		aResultado[2] := "Concluidos " + cValToChar(nConcluidos) + " de " + cValToChar(Len(aGrupos)) + " lote(s). " + cErro
@@ -1644,6 +1649,7 @@ Static Function ZMEntryDocs(aState, aSelecionados, aOrigens, cFornecedor, cLojaF
 		EndIf
 		aAdd(aDocsRet, {cDocRet, cSerieDoc})
 		ZMStage(aEtapas, 2, "[OK] Entrada " + AllTrim(cDocRet) + "/" + AllTrim(cSerieDoc) + " confirmada.", oDlg)
+		ZMStage(aEtapas, 3, "[OK] SF1/SD1 confirmadas para " + AllTrim(cDocRet) + "/" + AllTrim(cSerieDoc) + ".", oDlg)
 	Next nOrigem
 
 Return ""
