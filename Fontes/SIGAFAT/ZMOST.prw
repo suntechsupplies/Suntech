@@ -188,7 +188,8 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
 		cEtapa := "CRIAR_TCBROWSE"
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
-		oBrowse := TCBrowse():New(1, 1, aSize[5] - 25, Max(80, (aSize[6] * (100 - nFiltros) / 100) - 25),,,,oBody)
+		oBrowse := TCBrowse():New(1, 1, aSize[5] - 25, Max(80, (aSize[6] * (100 - nFiltros) / 100) - 25),,,,oBody,,,,,,,,,,,,,,.T.)
+		oBrowse:Align := 5
 		oBrowse:SetArray(ZMInvData(aState))
 		ZMInvCols(oBrowse, aState, oCheck, oUncheck)
 		oBrowse:lAdjustColSize := .T.
