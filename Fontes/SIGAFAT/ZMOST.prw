@@ -614,14 +614,7 @@ Static Function ZMClear(aFiltro, aState, aGets, oBrowse, oResumo)
 		aFiltro[nCampo] := aNovo[nCampo]
 		aGets[nCampo]:Refresh()
 	Next nCampo
-	aState[1] := {}
-	aState[2] := {}
-	aState[5] := {}
-	aState[6] := ""
-	oBrowse:SetArray(ZMInvData(aState))
-	oBrowse:nAt := 1
-	oBrowse:Refresh()
-	oResumo:SetText("Nenhuma consulta realizada.")
+	ZMLoad(aFiltro, aState, oBrowse, oResumo)
 
 Return Nil
 
