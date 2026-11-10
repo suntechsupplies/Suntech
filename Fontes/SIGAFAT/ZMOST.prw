@@ -75,7 +75,7 @@ User Function ZMOST()
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261110-11")
+		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261110-12")
 		cEtapa := "DIMENSIONAR"
 		aSize := MsAdvSize()
 		If ValType(aSize) != "A"
@@ -127,7 +127,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261110-11")
+		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261110-12")
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
 		aFiltro := ZMFilters()
 		cContexto := "Empresa " + cEmpAnt + " | Filial " + cFilAnt + " | SIMULACAO"
@@ -181,10 +181,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		@ 80, 77 Button oButton Prompt "Limpar" Size 55, 15 Of oTop Pixel Action ZMClear(aFiltro, aState, aGets, oBrowse, oResumo) When !aState[3]
 		@ 80, 138 Button oButton Prompt "Detalhar" Size 65, 15 Of oTop Pixel Action ZMInvDtl(aState, oBrowse, oResumo, .F.) When !aState[3]
 		@ 80, 209 Button oButton Prompt "Selecionar" Size 65, 15 Of oTop Pixel Action ZMInvDtl(aState, oBrowse, oResumo, .T.) When !aState[3]
-		@ 80, 280 Button oButton Prompt "Previa" Size 65, 15 Of oTop Pixel Action ZMSimul(aState) When !aState[3]
-		@ 80, 351 Button oButton Prompt "Fechar" Size 65, 15 Of oTop Pixel Action oDlg:End() When !aState[3]
-		@ 80, 422 Button oButton Prompt "Testes" Size 65, 15 Of oTop Pixel Action ZMTestRun() When !aState[3]
-		@ 80, 493 Button oButton Prompt "Renovar" Size 72, 15 Of oTop Pixel Action ZMProcess(aState, oBrowse, oResumo) When !aState[3]
+		@ 80, 280 Button oButton Prompt "Renovar" Size 72, 15 Of oTop Pixel Action ZMProcess(aState, oBrowse, oResumo) When !aState[3]
 		@ 105, 6 Say oResumo Prompt aState[4] Size 460, 10 Of oTop Pixel
 
 		cEtapa := "CRIAR_GRADE"
@@ -200,7 +197,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		ConOut("[ZMOST][TELA] TCBrowse configurado com colunas explicitas")
 		cEtapa := "GRADE_PRONTA"
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
-		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261110-11")
+		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261110-12")
 	Recover Using oError
 		cErro := "Etapa " + cEtapa + ": " + ZMError(oError)
 		ConOut("[ZMOST][TELA] Falha: " + cErro)
@@ -738,66 +735,6 @@ Static Function ZMQty(nQtd, nSaldo, nDec)
 	EndIf
 
 Return ""
-
-Static Function ZMSimul(aState)
-
-	Local aUnidades := {}
-	Local aLinha := {}
-	Local nLinha := 0
-	Local nUM := 0
-	Local nMarcados := 0
-	Local nPend := 0
-	Local cTexto := ""
-
-	If aState[3]
-		Return Nil
-	EndIf
-	For nLinha := 1 To Len(aState[1])
-		aLinha := aState[1, nLinha]
-		If !aLinha[ZM_MARCA]
-			Loop
-		EndIf
-		nMarcados++
-		If aLinha[ZM_STATUS] == "PENDENTE" .Or. Empty(aLinha[ZM_DEST]) .Or. Empty(aLinha[ZM_UM]) .Or. ZMNeedsSupplier(aLinha)
-			nPend++
-			Loop
-		EndIf
-		If !Empty(ZMQty(aLinha[ZM_QTSEL], aLinha[ZM_SALDO], TamSX3("B6_QUANT")[2]))
-			nPend++
-			Loop
-		EndIf
-		nUM := AScan(aUnidades, {|aRegistro| aRegistro[1] == aLinha[ZM_UM]})
-		If nUM == 0
-			aAdd(aUnidades, {aLinha[ZM_UM], 0, 0})
-			nUM := Len(aUnidades)
-		EndIf
-		If aLinha[ZM_DEST] == "RENOVAR"
-			aUnidades[nUM, 2] += aLinha[ZM_QTSEL]
-		ElseIf aLinha[ZM_DEST] == "FATURAR"
-			aUnidades[nUM, 3] += aLinha[ZM_QTSEL]
-		Else
-			nPend++
-		EndIf
-	Next nLinha
-	If nMarcados == 0
-		FWAlertInfo("Nenhum item selecionado.", "Simulacao")
-		Return Nil
-	EndIf
-	If nPend > 0
-		FWAlertInfo("Itens selecionados com pendencias: " + cValToChar(nPend), "Simulacao incompleta")
-		Return Nil
-	EndIf
-	cTexto := "Origens selecionadas: " + cValToChar(nMarcados) + CRLF
-	cTexto += "Referencia: " + DtoC(aState[2, 8]) + CRLF
-	For nUM := 1 To Len(aUnidades)
-		cTexto += CRLF + "UM " + AllTrim(aUnidades[nUM, 1])
-		cTexto += " | Renovar: " + AllTrim(Transform(aUnidades[nUM, 2], PesqPict("SB6", "B6_QUANT")))
-		cTexto += " | Faturar: " + AllTrim(Transform(aUnidades[nUM, 3], PesqPict("SB6", "B6_QUANT")))
-	Next nUM
-	cTexto += CRLF + CRLF + "Situacao fiscal: nao validada. Condicoes comerciais: pendentes."
-	FWAlertInfo(cTexto, "Previa de destinacao")
-
-Return Nil
 
 Static Function ZMProcess(aState, oBrowse, oResumo)
 
@@ -2758,187 +2695,3 @@ Static Function ZMError(oError)
 
 Return cValToChar(oError)
 
-Static Function ZMOSTST()
-
-	Local aCasos := {}
-	Local aReps := {{"12345678901", "R001", "Representante teste", "2"}}
-	Local aSuppliers := {}
-	Local aRep := {}
-	Local aSupplier := {}
-	Local aTestState := {{}, {}, .F., "", {}}
-	Local aTestLine := {}
-	Local aTestGroupState := {{}, {}, .F., "", {}, ""}
-	Local aTestGroups := {}
-	Local aTestGroupResult := {}
-	Local aTestInvoices := {}
-	Local aTestMap := {}
-	Local aEntradaSel := {}
-	Local aEntradaOutra := {}
-	Local dReferencia := StoD("20261104")
-	Local dHoje := Date()
-	Local cResumo := ""
-	Local nCaso := 0
-	Local nFalhas := 0
-
-	aAdd(aCasos, {"Data vazia", ZMClass(StoD(""), dReferencia) == "ATIVO"})
-	aAdd(aCasos, {"Data passada", ZMClass(StoD("20261103"), dReferencia) == "DESCONTINUADO"})
-	aAdd(aCasos, {"Data igual a referencia", ZMClass(dReferencia, dReferencia) == "DESCONTINUADO"})
-	aAdd(aCasos, {"Data futura", ZMClass(StoD("20261105"), dReferencia) == "ATIVO"})
-	aAdd(aCasos, {"B6 saldo no periodo completo", ZMB6Mode(StoD("19000101"), dHoje)})
-	aAdd(aCasos, {"ESTCalcTerc em periodo personalizado", !ZMB6Mode(StoD("20260101"), dHoje)})
-	aAdd(aCasos, {"Quantidade integral", Empty(ZMQty(2, 2, 2))})
-	aAdd(aCasos, {"Quantidade parcial", Empty(ZMQty(1.25, 2, 2))})
-	aAdd(aCasos, {"Quantidade zero", !Empty(ZMQty(0, 2, 2))})
-	aAdd(aCasos, {"Quantidade negativa", !Empty(ZMQty(-1, 2, 2))})
-	aAdd(aCasos, {"Quantidade excedente", !Empty(ZMQty(3, 2, 2))})
-	aAdd(aCasos, {"Precisao excedente", !Empty(ZMQty(1.251, 2, 2))})
-	aAdd(aCasos, {"Quantidade nao numerica", !Empty(ZMQty("1", 2, 2))})
-	aAdd(aCasos, {"Normalizacao de documento", ZMDoc("123.456.789-01") == "12345678901"})
-	aAdd(aCasos, {"Documento vazio", Empty(ZMDoc(Nil))})
-	aSuppliers := {{"12345678901", "V001", "01", "2"}}
-	aSupplier := ZMSupplier(aSuppliers, "123.456.789-01")
-	aAdd(aCasos, {"Fornecedor SA2 unico ativo", aSupplier[1] == "V001" .And. aSupplier[2] == "01" .And. Empty(aSupplier[3])})
-	aSupplier := ZMSupplier(aSuppliers, "98765432109")
-	aAdd(aCasos, {"Fornecedor SA2 ausente", Empty(aSupplier[1]) .And. !Empty(aSupplier[3])})
-	aSuppliers[1, 4] := "1"
-	aSupplier := ZMSupplier(aSuppliers, "12345678901")
-	aAdd(aCasos, {"Fornecedor SA2 inativo", !Empty(aSupplier[3])})
-	aAdd(aSuppliers, {"12345678901", "V002", "02", "2"})
-	aSupplier := ZMSupplier(aSuppliers, "12345678901")
-	aAdd(aCasos, {"Fornecedor SA2 ambiguo", Empty(aSupplier[1]) .And. !Empty(aSupplier[3])})
-	aTestLine := ZMEmpty()
-	aTestLine[ZM_DEST] := "RENOVAR"
-	aTestLine[ZM_SA2MSG] := "Sem fornecedor"
-	aAdd(aCasos, {"Fornecedor obrigatorio para renovacao", ZMNeedsSupplier(aTestLine)})
-	aTestLine[ZM_DEST] := "FATURAR"
-	aAdd(aCasos, {"Fornecedor nao exigido para venda", !ZMNeedsSupplier(aTestLine)})
-	aAdd(aCasos, {"Descontinuado entra na renovacao integral", ZMModeDest("DESCONTINUADO", .T.) == "RENOVAR"})
-	aAdd(aCasos, {"Descontinuado vai para venda no modo misto", ZMModeDest("DESCONTINUADO", .F.) == "FATURAR"})
-	aAdd(aCasos, {"Item liberado permanece na renovacao do modo misto", ZMModeDest("ATIVO", .F.) == "RENOVAR"})
-	aTestLine := ZMEmpty()
-	aTestLine[ZM_STATUS] := "CONFERIR"
-	aTestLine[ZM_CLIENT] := "C00001"
-	aTestLine[ZM_LOJA] := "01"
-	aTestLine[ZM_DOC] := "000001"
-	aTestLine[ZM_SERIE] := "1"
-	aTestLine[ZM_UM] := "UN"
-	aTestLine[ZM_SALDO] := 2
-	aTestLine[ZM_ARMAZ] := 2
-	aTestLine[ZM_QTSEL] := 2
-	aTestLine[ZM_PRECO] := 10
-	aTestLine[ZM_CLASSE] := "ATIVO"
-	aTestLine[ZM_TES] := "6V1"
-	aTestLine[ZM_IDENT] := "ID001"
-	aTestLine[ZM_ITEM] := "01"
-	aTestLine[ZM_ORIGITEM] := "01"
-	aTestLine[ZM_MARCA] := .T.
-	aTestLine[ZM_SA2COD] := "C00001"
-	aTestLine[ZM_SA2LOJA] := "01"
-	aTestLine[ZM_ORIGPED] := "011221"
-	aAdd(aTestGroupState[1], aTestLine)
-	aTestLine := AClone(aTestLine)
-	aTestLine[ZM_DOC] := "000002"
-	aTestLine[ZM_IDENT] := "ID002"
-	aTestLine[ZM_ORIGPED] := "011222"
-	aTestLine[ZM_CLASSE] := "DESCONTINUADO"
-	aAdd(aTestGroupState[1], aTestLine)
-	aTestGroupResult := ZMGrpSel(aTestGroupState)
-	If aTestGroupResult[1]
-		aTestGroups := aTestGroupResult[2]
-	EndIf
-	aAdd(aCasos, {"Selecao com duas notas gera dois grupos", aTestGroupResult[1] .And. Len(aTestGroups) == 2 .And. aTestGroups[1, ZM_G_DOC] == "000001" .And. aTestGroups[2, ZM_G_DOC] == "000002" .And. aTestGroups[2, ZM_G_DESCONT]})
-	aTestGroupResult := ZMOrigObs(aTestGroupState, {1, 2})
-	aAdd(aCasos, {"Observacao consolidada preserva notas de origem", aTestGroupResult[1] == "RENOVACAO MOSTRUARIO - NFs ORIGEM 000001/1, 000002/1" .And. Empty(aTestGroupResult[2])})
-	aTestGroupState[1, 2, ZM_SERIE] := "2"
-	aEntradaSel := ZMEntrySel(aTestGroupState, {1, 2}, "000001", "1")
-	aEntradaOutra := ZMEntrySel(aTestGroupState, {1, 2}, "000002", "2")
-	aAdd(aCasos, {"Series diferentes consolidam com entradas separadas", ZMSeriesOK("2", "1", .T.) .And. !ZMSeriesOK("2", "1", .F.) .And. Len(aEntradaSel) == 1 .And. aEntradaSel[1] == 1 .And. Len(aEntradaOutra) == 1 .And. aEntradaOutra[1] == 2})
-	aAdd(aCasos, {"Resumo preserva cada entrada", ZMEntryRefs({{"000100", "1"}, {"000101", "2"}}) == "000100/1, 000101/2"})
-	aTestGroupState[1, 2, ZM_SERIE] := "1"
-	aTestGroupState[1, 2, ZM_DOC] := "000001"
-	aTestGroupState[1, 2, ZM_ORIGPED] := "011223"
-	aTestGroupResult := ZMGrpSel(aTestGroupState)
-	aAdd(aCasos, {"Uma nota com pedidos originais divergentes bloqueada", !aTestGroupResult[1]})
-	aRep := ZMRep(aReps, "123.456.789-01")
-	aAdd(aCasos, {"Representante unico ativo", aRep[1] == "R001" .And. Empty(aRep[3])})
-	aRep := ZMRep(aReps, "98765432109")
-	aAdd(aCasos, {"Representante ausente", !Empty(aRep[3])})
-	aReps[1, 4] := "1"
-	aRep := ZMRep(aReps, "12345678901")
-	aAdd(aCasos, {"Representante inativo", !Empty(aRep[3])})
-	aAdd(aReps, {"12345678901", "R002", "Duplicado teste", "2"})
-	aRep := ZMRep(aReps, "12345678901")
-	aAdd(aCasos, {"Documento ambiguo", Empty(aRep[1]) .And. !Empty(aRep[3])})
-	aRep := ZMRep(aReps, "123")
-	aAdd(aCasos, {"Tamanho de documento invalido", !Empty(aRep[3])})
-	aAdd(aCasos, {"Escape de literal SQL", ZMSql("D'AVILA") == "'D''AVILA'"})
-	aTestLine := ZMEmpty()
-	aTestLine[ZM_STATUS] := "CONFERIR"
-	aTestLine[ZM_CLIENT] := "C00001"
-	aTestLine[ZM_LOJA] := "01"
-	aTestLine[ZM_DOC] := "000001"
-	aTestLine[ZM_SERIE] := "1"
-	aTestLine[ZM_EMIS] := dReferencia
-	aTestLine[ZM_CLASSE] := "ATIVO"
-	aAdd(aTestState[1], aTestLine)
-	aTestLine := AClone(aTestLine)
-	aTestLine[ZM_ITEM] := "02"
-	aAdd(aTestState[1], aTestLine)
-	aTestLine := AClone(aTestLine)
-	aTestLine[ZM_DOC] := "000002"
-	aAdd(aTestState[1], aTestLine)
-	aTestInvoices := ZMInvBuild(aTestState)
-	aTestState[5] := aTestInvoices
-	aTestMap := ZMItemMap(aTestState, 1)
-	aAdd(aCasos, {"Agrupamento de itens por nota", Len(aTestInvoices) == 2 .And. aTestInvoices[1, ZM_INV_ITEMS] == 2 .And. Len(aTestMap) == 2 .And. aTestMap[2, 1] == 2})
-	aTestLine := AClone(aTestState[1, 1])
-	aTestLine[ZM_SALDO] := 2
-	aTestState[1, 1] := aTestLine
-	aTestLine := AClone(aTestState[1, 2])
-	aTestLine[ZM_STATUS] := "PENDENTE"
-	aTestLine[ZM_SALDO] := 2
-	aTestState[1, 2] := aTestLine
-	aTestLine := AClone(aTestState[1, 3])
-	aTestLine[ZM_SALDO] := 3
-	aTestLine[ZM_CLASSE] := "DESCONTINUADO"
-	aTestState[1, 3] := aTestLine
-	aTestState[5] := ZMInvBuild(aTestState)
-	ZMInvSetInvoice(aTestState, 1, .T.)
-	aTestState[5] := ZMInvBuild(aTestState)
-	aAdd(aCasos, {"Selecao da nota ignora itens pendentes", aTestState[1, 1, ZM_MARCA] .And. !aTestState[1, 2, ZM_MARCA] .And. ZMInvChecked(aTestState, 1)})
-	ZMInvSetInvoice(aTestState, 1, .F.)
-	aTestState[5] := ZMInvBuild(aTestState)
-	aAdd(aCasos, {"Desmarcacao da nota remove selecao elegivel", !aTestState[1, 1, ZM_MARCA] .And. !aTestState[1, 2, ZM_MARCA]})
-	ZMInvSetAll(aTestState, .T.)
-	aTestState[5] := ZMInvBuild(aTestState)
-	aAdd(aCasos, {"Selecao em massa ignora pendencias", ZMInvAllChecked(aTestState) .And. !aTestState[1, 2, ZM_MARCA] .And. Empty(aTestState[1, 3, ZM_DEST])})
-	ZMInvSetAll(aTestState, .F.)
-	aTestState[5] := ZMInvBuild(aTestState)
-	aAdd(aCasos, {"Desmarcacao em massa limpa itens elegiveis", !aTestState[1, 1, ZM_MARCA] .And. !aTestState[1, 3, ZM_MARCA] .And. !ZMInvAllChecked(aTestState)})
-	For nCaso := 1 To Len(aCasos)
-		If !aCasos[nCaso, 2]
-			nFalhas++
-		EndIf
-		ConOut("[ZMOST TESTE] " + aCasos[nCaso, 1] + ": " + IIf(aCasos[nCaso, 2], "OK", "FALHOU"))
-	Next nCaso
-	cResumo := "Casos=" + cValToChar(Len(aCasos)) + "; falhas=" + cValToChar(nFalhas)
-	ConOut("[ZMOST TESTE] " + cResumo)
-
-Return {nFalhas == 0, cResumo, aCasos}
-
-Static Function ZMTestRun()
-
-	Local aResultado := ZMOSTST()
-	Local cTitulo := "Testes ZMOST"
-
-	If ValType(aResultado) != "A" .Or. Len(aResultado) < 3
-		FWAlertError("A rotina de testes retornou um resultado invalido.", cTitulo)
-		Return Nil
-	EndIf
-	If aResultado[1]
-		FWAlertInfo(aResultado[2], cTitulo)
-	Else
-		FWAlertError(aResultado[2] + ". Consulte o console [ZMOST TESTE] para identificar os casos com falha.", cTitulo)
-	EndIf
-
-Return Nil
