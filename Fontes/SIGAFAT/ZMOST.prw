@@ -75,7 +75,7 @@ User Function ZMOST()
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261109-05")
+		ConOut("[ZMOST][TELA] Inicio U_ZMOST; revisao=20261110-11")
 		cEtapa := "DIMENSIONAR"
 		aSize := MsAdvSize()
 		If ValType(aSize) != "A"
@@ -127,7 +127,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 	Local oError    := Nil
 
 	Begin Sequence
-		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261109-05")
+		ConOut("[ZMOST][TELA] Janela ativada; revisao=20261110-11")
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
 		aFiltro := ZMFilters()
 		cContexto := "Empresa " + cEmpAnt + " | Filial " + cFilAnt + " | SIMULACAO"
@@ -200,7 +200,7 @@ Static Function ZMBuild(oDlg, aSize, oLayer)
 		ConOut("[ZMOST][TELA] TCBrowse configurado com colunas explicitas")
 		cEtapa := "GRADE_PRONTA"
 		ConOut("[ZMOST][TELA] Etapa=" + cEtapa)
-		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261109-05")
+		ConOut("[ZMOST][TELA] Cockpit pronto; revisao=20261110-11")
 	Recover Using oError
 		cErro := "Etapa " + cEtapa + ": " + ZMError(oError)
 		ConOut("[ZMOST][TELA] Falha: " + cErro)
@@ -816,7 +816,6 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 	Local cSerieSaida := ""
 	Local cModo := ""
 	Local dEntrega := Date()
-	Local lIniciado := .F.
 	Local nGrupo := 0
 	Local nItens := 0
 	Local lVendaPendente := .F.
@@ -845,13 +844,17 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 			ErrorBlock(bError)
 			Return Nil
 		EndIf
-		cModo := AllTrim(cValToChar(aResposta[1]))
-		If AScan({"1", "2"}, cModo) == 0
+		cModo := Upper(AllTrim(cValToChar(aResposta[1])))
+		ConOut("[ZMOST][PROCESSO] ParamBox modo; tipo=" + ValType(aResposta[1]) + "; valor=" + cModo)
+		If cModo == "1" .Or. cModo == "INDIVIDUAL (NOTA A NOTA)"
+			lConsolidado := .F.
+		ElseIf cModo == "2" .Or. cModo == "CONSOLIDADO"
+			lConsolidado := .T.
+		Else
 			ErrorBlock(bError)
 			FWAlertError("Modo de processamento invalido.", "Renovacao")
 			Return Nil
 		EndIf
-		lConsolidado := cModo == "2"
 		If lConsolidado
 			aAgrupamento := ZMGrpSel(aState, .T.)
 			If !aAgrupamento[1]
@@ -866,9 +869,11 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 		aGrupo := aGrupos[nGrupo]
 		aGrupo[ZM_G_RENOVA] := .T.
 		If aGrupo[ZM_G_DESCONT]
+			ConOut("[ZMOST][PROCESSO] Confirmacao de descontinuados antes; nota=" + AllTrim(aGrupo[ZM_G_DOC]) + "/" + AllTrim(aGrupo[ZM_G_SERIE]))
 			aGrupo[ZM_G_RENOVA] := FWAlertYesNo("Nota " + AllTrim(aGrupo[ZM_G_DOC]) + "/" + AllTrim(aGrupo[ZM_G_SERIE]) + " contem itens descontinuados." + CRLF + ;
 				"Sim: renovar a nota inteira, inclusive os descontinuados." + CRLF + ;
 				"Nao: vender os descontinuados e renovar os itens liberados.", "Destino dos descontinuados")
+			ConOut("[ZMOST][PROCESSO] Confirmacao de descontinuados depois; renovar=" + cValToChar(aGrupo[ZM_G_RENOVA]))
 		EndIf
 		If !aGrupo[ZM_G_RENOVA]
 			lVendaPendente := .T.
@@ -889,22 +894,28 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 	aResposta := {}
 	aAdd(aPerguntas, {1, "Serie da NF de saida", Space(TamSX3("F2_SERIE")[1]), "@!", "", "", "", 60, .T.})
 	aAdd(aPerguntas, {1, "Data prevista de entrega", Date(), "", "", "", "", 70, .T.})
+	ConOut("[ZMOST][PROCESSO] ParamBox de faturamento antes")
 	If !ParamBox(aPerguntas, "Parametros do faturamento", @aResposta)
+		ConOut("[ZMOST][PROCESSO] ParamBox de faturamento cancelado")
 		ErrorBlock(bError)
 		Return Nil
 	EndIf
 	cSerieSaida := Upper(AllTrim(aResposta[1]))
 	dEntrega := aResposta[2]
+	ConOut("[ZMOST][PROCESSO] ParamBox de faturamento depois; serie=" + cSerieSaida + "; tipoEntrega=" + ValType(dEntrega))
 	If Empty(cSerieSaida) .Or. Len(cSerieSaida) > TamSX3("F2_SERIE")[1] .Or. ValType(dEntrega) != "D" .Or. Empty(dEntrega)
 		ErrorBlock(bError)
 		FWAlertError("Informe uma serie fiscal valida e uma data prevista de entrega.", "Renovacao")
 		Return Nil
 	EndIf
+	ConOut("[ZMOST][PROCESSO] Pergunte MT460A antes")
 	If !Pergunte("MT460A", .T.)
+		ConOut("[ZMOST][PROCESSO] Pergunte MT460A cancelado")
 		ErrorBlock(bError)
 		FWAlertInfo("Parametros de faturamento cancelados. Nenhum documento foi criado.", "Renovacao")
 		Return Nil
 	EndIf
+	ConOut("[ZMOST][PROCESSO] Pergunte MT460A depois")
 	For nGrupo := 1 To Len(aGrupos)
 		aGrupo := aGrupos[nGrupo]
 		aSelecionados := aGrupo[ZM_G_ROWS]
@@ -916,35 +927,40 @@ Static Function ZMProcess(aState, oBrowse, oResumo)
 	For nGrupo := 1 To Len(aGrupos)
 		nItens += Len(aGrupos[nGrupo, ZM_G_ROWS])
 	Next nGrupo
+	ConOut("[ZMOST][PROCESSO] Confirmacao final antes")
 	If !FWAlertYesNo("Processamento " + IIf(lConsolidado, "consolidado", "individual nota a nota") + ": " + cValToChar(Len(aGrupos)) + " documento(s), " + cValToChar(nItens) + " item(ns), liberar pedidos e emitir as notas de saida na serie " + cSerieSaida + "?" + CRLF + ;
 		"A autorizacao/transmissao da NF-e continua no AUTONFE padrao.", "Confirmar renovacao")
+		ConOut("[ZMOST][PROCESSO] Confirmacao final recusada")
 		ErrorBlock(bError)
 		Return Nil
 	EndIf
+	ConOut("[ZMOST][PROCESSO] Confirmacao final aceita; abrindo acompanhamento")
 
 	Define MsDialog oDlg Title "Acompanhamento da renovacao" From 0, 0 To 265, 660 Pixel
-	@ 8, 8 Say oSay Prompt "1. Validacao: aguardando" Size 620, 12 Of oDlg Pixel
+	ConOut("[ZMOST][PROCESSO] Acompanhamento aberto; lote iniciara automaticamente")
+	@ 6, 8 Say oSay Prompt "1. Validacao: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 22, 8 Say oSay Prompt "2. Entrada MATA103: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 18, 8 Say oSay Prompt "2. Entrada MATA103: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 36, 8 Say oSay Prompt "3. Conferencia SF1/SD1: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 30, 8 Say oSay Prompt "3. Conferencia SF1/SD1: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 50, 8 Say oSay Prompt "4. Pedido MATA410: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 42, 8 Say oSay Prompt "4. Pedido MATA410: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 64, 8 Say oSay Prompt "5. Conferencia SC5/SC6: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 54, 8 Say oSay Prompt "5. Conferencia SC5/SC6: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 78, 8 Say oSay Prompt "6. Liberacao MaLibDoFat/SC9: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 66, 8 Say oSay Prompt "6. Liberacao MaLibDoFat/SC9: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 92, 8 Say oSay Prompt "7. Faturamento MATA461: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 78, 8 Say oSay Prompt "7. Faturamento MATA461: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 106, 8 Say oSay Prompt "8. Conferencia SF2/SD2: aguardando" Size 620, 12 Of oDlg Pixel
+	@ 90, 8 Say oSay Prompt "8. Conferencia SF2/SD2: aguardando" Size 620, 12 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 122, 8 Say oSay Prompt "Acompanhamento desta sessao; autorizacao/transmissao pelo AUTONFE padrao." Size 620, 24 Of oDlg Pixel
+	@ 104, 8 Say oSay Prompt "Transmissao NF-e pelo AUTONFE padrao." Size 450, 16 Of oDlg Pixel
 	aAdd(aEtapas, oSay)
-	@ 230, 475 Button oButton Prompt "Executar" Size 75, 15 Of oDlg Pixel Action (lIniciado := .T., ZMRunBatch(aState, aGrupos, aEtapas, oDlg, @aResultado, cSerieSaida, dEntrega), aState[3] := .F.) When !lIniciado
-	@ 230, 565 Button oButton Prompt "Fechar" Size 65, 15 Of oDlg Pixel Action oDlg:End() When !lIniciado .Or. !aState[3]
+	@ 104, 565 Button oButton Prompt "Fechar" Size 65, 15 Of oDlg Pixel Action oDlg:End() When !aState[3]
+	ConOut("[ZMOST][PROCESSO] Controles do acompanhamento criados")
 	aState[3] := .T.
-	Activate MsDialog oDlg Centered
+	Activate MsDialog oDlg Centered On Init ZMRunBatch(aState, aGrupos, aEtapas, oDlg, @aResultado, cSerieSaida, dEntrega)
+	ConOut("[ZMOST][PROCESSO] Acompanhamento fechado")
 	aState[3] := .F.
 	If aResultado[5] .And. Len(aState[2]) == 10
 		ZMLoad(AClone(aState[2]), aState, oBrowse, oResumo)
@@ -1005,7 +1021,7 @@ Static Function ZMGrpSel(aState, lConsolidado)
 				aLinha[ZM_SA2COD] != aGrupo[ZM_G_FORNEC] .Or. aLinha[ZM_SA2LOJA] != aGrupo[ZM_G_LOJAFOR]
 				Return {.F., {}, "As origens selecionadas possuem cliente/loja ou fornecedor/loja incompatíveis; processe nota a nota."}
 			EndIf
-			If aLinha[ZM_SERIE] != aGrupo[ZM_G_SERIE]
+			If !ZMSeriesOK(aLinha[ZM_SERIE], aGrupo[ZM_G_SERIE], lConsolidado)
 				Return {.F., {}, "As origens selecionadas possuem series diferentes; processe nota a nota."}
 			EndIf
 			If !lConsolidado .And. aLinha[ZM_ORIGPED] != aGrupo[ZM_G_PEDIDO]
@@ -1069,6 +1085,7 @@ Static Function ZMOrdComp(aState, aSelecionados)
 
 	Local aPedidos := {}
 	Local aCabBase := {}
+	Local aCamposComp := {"C5_CLIENTE", "C5_LOJACLI", "C5_LOJAENT", "C5_CONDPAG", "C5_TPFRETE", "C5_MOEDA", "C5_TABELA"}
 	Local aRows := {}
 	Local aLinha := {}
 	Local cQuery := ""
@@ -1076,15 +1093,18 @@ Static Function ZMOrdComp(aState, aSelecionados)
 	Local nItem := 0
 	Local nCampo := 0
 
+	ConOut("[ZMOST][PROCESSO] ZMOrdComp; C5_VEND1/C5_TRANSP nao bloqueiam consolidacao; cabecalho mantem valores do primeiro pedido.")
 	For nItem := 1 To Len(aSelecionados)
 		aLinha := aState[1, aSelecionados[nItem]]
 		cPedido := AllTrim(aLinha[ZM_ORIGPED])
 		If AScan(aPedidos, {|cOrigem| cOrigem == cPedido}) > 0
 			Loop
 		EndIf
-		cQuery := "SELECT C5_CLIENTE, C5_LOJACLI, C5_LOJAENT, C5_CONDPAG, C5_VEND1, C5_TRANSP, C5_TPFRETE, C5_MOEDA, C5_TABELA FROM " + RetSqlName("SC5")
+		cQuery := "SELECT C5_CLIENTE, C5_LOJACLI, C5_LOJAENT, C5_CONDPAG, C5_TPFRETE, C5_MOEDA, C5_TABELA FROM " + RetSqlName("SC5")
 		cQuery += " WHERE C5_FILIAL = " + ZMSql(xFilial("SC5")) + " AND C5_NUM = " + ZMSql(cPedido) + " AND D_E_L_E_T_ = ' '
+		ConOut("[ZMOST][PROCESSO] ZMOrdComp consulta; pedido=" + cPedido)
 		aRows := ZMRows(cQuery)
+		ConOut("[ZMOST][PROCESSO] ZMOrdComp retorno; pedido=" + cPedido + "; linhas=" + cValToChar(Len(aRows)))
 		If Len(aRows) != 1
 			Return "Pedido original inexistente ou ambiguo: " + cPedido
 		EndIf
@@ -1093,6 +1113,7 @@ Static Function ZMOrdComp(aState, aSelecionados)
 		Else
 			For nCampo := 1 To Len(aCabBase)
 				If AllTrim(cValToChar(aCabBase[nCampo])) != AllTrim(cValToChar(aRows[1, nCampo]))
+					ConOut("[ZMOST][PROCESSO] ZMOrdComp divergencia; pedido=" + cPedido + "; campo=" + aCamposComp[nCampo] + "; base=" + AllTrim(cValToChar(aCabBase[nCampo])) + "; atual=" + AllTrim(cValToChar(aRows[1, nCampo])))
 					Return "Pedidos originais com condicoes comerciais diferentes; consolide nota a nota."
 				EndIf
 			Next nCampo
@@ -1170,15 +1191,15 @@ Static Function ZMRunBatch(aState, aGrupos, aEtapas, oDlg, aResultado, cSerieSai
 	EndIf
 	aResultado[5] := lAtualiza
 	ZMStage(aEtapas, 9, aResultado[2], oDlg)
+	aState[3] := .F.
+	oDlg:Refresh()
+	ConOut("[ZMOST][PROCESSO] Lote finalizado; fechamento habilitado")
 
 Return Nil
 
 Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSerieSaida, dEntrega)
 
 	Local aArea := GetArea()
-	Local aCab := {}
-	Local aItens := {}
-	Local aItem := {}
 	Local aPedidoCab := {}
 	Local aItensPed := {}
 	Local aItemPed := {}
@@ -1189,6 +1210,7 @@ Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSer
 	Local aFaturamento := {}
 	Local aOrigens := {}
 	Local aOrigem := {}
+	Local aDocsRet := {}
 	Local aMutexes := {}
 	Local aObs := {}
 	Local aLinha := {}
@@ -1301,7 +1323,7 @@ Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSer
 		EndIf
 		ConOut("[ZMOST][PROCESSO] Checkpoint SC6 operacoes depois; itens=" + cValToChar(Len(aOperResult[1])))
 
-		ConOut("[ZMOST][PROCESSO] Checkpoint antes da transicao para MATA103")
+		ConOut("[ZMOST][PROCESSO] Preparando pedido consolidado; entradas MATA103 serao executadas por nota.")
 		For nItem := 1 To Len(aSelecionados)
 			aLinha := aState[1, aSelecionados[nItem]]
 			aItemPed := {}
@@ -1323,77 +1345,19 @@ Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSer
 			Break("MATA410 nao iniciada: quantidade de itens preparados diverge da selecao (" + cValToChar(Len(aItensPed)) + "/" + cValToChar(Len(aSelecionados)) + "). Nenhuma entrada foi criada.")
 		EndIf
 		ZMStage(aEtapas, 1, "[OK] Origem autorizada, fornecedor e saldo atual conferidos.", oDlg)
-		ZMStage(aEtapas, 2, "[EM ANDAMENTO] Reservando documento e executando MATA103.", oDlg)
-		ConOut("[ZMOST][PROCESSO] Checkpoint ZMReserve SF1 antes")
-		aNumero := ZMReserve("SF1", "F1_DOC")
-		ConOut("[ZMOST][PROCESSO] Checkpoint ZMReserve SF1 depois; erro=" + AllTrim(aNumero[2]))
-		If !Empty(aNumero[2])
-			Break(aNumero[2])
+		cErro := ZMEntryDocs(aState, aSelecionados, aOrigens, cFornecedor, cLojaFor, aEtapas, oDlg, @aDocsRet, @lReservaPendente, @lAutoInvocado, @cDocRet, @cSerieDoc)
+		If !Empty(cErro)
+			Break(cErro)
 		EndIf
-		lReservaPendente := .T.
-		lAutoInvocado := .F.
-		cDocRet := aNumero[1]
-		cSerieDoc := PadR(AllTrim(cSerie), TamSX3("F1_SERIE")[1])
-		aAdd(aCab, {"F1_DOC", cDocRet, Nil})
-		aAdd(aCab, {"F1_SERIE", cSerieDoc, Nil})
-		aAdd(aCab, {"F1_TIPO", "B", Nil})
-		aAdd(aCab, {"F1_FORMUL", "S", Nil})
-		aAdd(aCab, {"F1_FORNECE", PadR(AllTrim(cFornecedor), TamSX3("F1_FORNECE")[1]), Nil})
-		aAdd(aCab, {"F1_LOJA", PadR(AllTrim(cLojaFor), TamSX3("F1_LOJA")[1]), Nil})
-		aAdd(aCab, {"F1_EMISSAO", Date(), Nil})
-		aAdd(aCab, {"F1_DTDIGIT", Date(), Nil})
-		aAdd(aCab, {"F1_ESPECIE", "SPED", Nil})
-		aAdd(aCab, {"F1_COND", "030", Nil})
-		aAdd(aCab, {"F1_MOEDA", 1, Nil})
-		aAdd(aCab, {"F1_TXMOEDA", 1, Nil})
-		For nItem := 1 To Len(aSelecionados)
-			aLinha := aState[1, aSelecionados[nItem]]
-			aItem := {}
-			aAdd(aItem, {"D1_ITEM", StrZero(nItem, TamSX3("D1_ITEM")[1]), Nil})
-			aAdd(aItem, {"D1_DOC", cDocRet, Nil})
-			aAdd(aItem, {"D1_SERIE", cSerieDoc, Nil})
-			aAdd(aItem, {"D1_COD", aLinha[ZM_PROD], Nil})
-			aAdd(aItem, {"D1_UM", aLinha[ZM_UM], Nil})
-			aAdd(aItem, {"D1_LOCAL", aLinha[ZM_LOCAL], Nil})
-			aAdd(aItem, {"D1_QUANT", aLinha[ZM_QTSEL], Nil})
-			aAdd(aItem, {"D1_VUNIT", aLinha[ZM_PRECO], Nil})
-			aAdd(aItem, {"D1_TOTAL", aLinha[ZM_QTSEL] * aLinha[ZM_PRECO], Nil})
-			aAdd(aItem, {"D1_TES", aLinha[ZM_RETOR], Nil})
-			aAdd(aItem, {"D1_NFORI", aLinha[ZM_DOC], Nil})
-			aAdd(aItem, {"D1_SERIORI", aLinha[ZM_SERIE], Nil})
-			aAdd(aItem, {"D1_ITEMORI", aLinha[ZM_ITEM], Nil})
-			aAdd(aItem, {"D1_IDENTB6", aLinha[ZM_IDENT], Nil})
-			aAdd(aItens, aItem)
-		Next nItem
-		lMsErroAuto := .F.
-		ConOut("[ZMOST][PROCESSO] MATA103 antes; documento reservado=" + AllTrim(cDocRet) + "/" + AllTrim(cSerie))
-		lAutoInvocado := .T.
-		MsExecAuto({|aHeader, aLines, nOption, lShow| MATA103(aHeader, aLines, nOption, lShow)}, aCab, aItens, 3, .F.)
-		ConfirmSX8()
-		lReservaPendente := .F.
-		lAutoInvocado := .F.
-		If lMsErroAuto
-			aLog := GetAutoGrLog()
-			Break("MATA103: " + ZMLogAuto(aLog))
-		EndIf
-		ConOut("[ZMOST][PROCESSO] MATA103 retornou sem flag de erro; iniciando conferencia no banco")
-		ZMStage(aEtapas, 2, "[OK] MATA103 retornou; conferindo SF1/SD1.", oDlg)
-		ZMStage(aEtapas, 3, "[EM ANDAMENTO] Conferindo todos os itens da entrada.", oDlg)
-		If !ZMEntryOK(cDocRet, cSerieDoc, cFornecedor, cLojaFor, aState, aSelecionados)
-			Break("MATA103 retornou sem erro, mas SF1/SD1 nao confirmaram o documento " + AllTrim(cDocRet) + ". Nao repita antes de reconciliar.")
-		EndIf
-		lRetornoCriado := .T.
-		aResultado[3] := cDocRet
-		aResultado[5] := .T.
-		ZMStage(aEtapas, 2, "[OK] Entrada confirmada: " + AllTrim(cDocRet) + "/" + AllTrim(cSerie), oDlg)
-		ZMStage(aEtapas, 3, "[OK] SF1/SD1 conferidas com origem, itens e identificadores.", oDlg)
-
+		lRetornoCriado := Len(aDocsRet) > 0
+		aResultado[3] := ZMEntryRefs(aDocsRet)
+		aResultado[5] := lRetornoCriado
 		ZMStage(aEtapas, 4, "[EM ANDAMENTO] Reservando numeracao do pedido SC5.", oDlg)
 		ConOut("[ZMOST][PROCESSO] Checkpoint ZMReserve SC5 antes; limite=100")
 		aNumero := ZMReserve("SC5", "C5_NUM")
 		ConOut("[ZMOST][PROCESSO] Checkpoint ZMReserve SC5 depois; numero=" + AllTrim(aNumero[1]) + "; erro=" + AllTrim(aNumero[2]))
 		If !Empty(aNumero[2])
-			Break("Entrada " + AllTrim(cDocRet) + " criada; pedido nao iniciado: " + aNumero[2])
+			Break("Entradas " + ZMEntryRefs(aDocsRet) + " confirmadas; pedido nao iniciado: " + aNumero[2])
 		EndIf
 		lReservaPendente := .T.
 		lAutoInvocado := .F.
@@ -1425,7 +1389,7 @@ Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSer
 				ConOut("[ZMOST][PROCESSO] MATA410 retornou; pedido=" + AllTrim(cPedidoNovo) + "; erroAuto=" + cValToChar(lMsErroAuto))
 				If lMsErroAuto
 					aLog := GetAutoGrLog()
-					Break("Entrada " + AllTrim(cDocRet) + " criada; MATA410: " + ZMLogAuto(aLog))
+					Break("Entradas " + ZMEntryRefs(aDocsRet) + " confirmadas; MATA410: " + ZMLogAuto(aLog))
 				EndIf
 				ZMStage(aEtapas, 5, "[EM ANDAMENTO] Conferindo cabecalho e itens do pedido.", oDlg)
 				If !ZMOrderOK(cPedidoNovo, cCliente, cLoja, cRepPedido, aState, aSelecionados, aOperResult[1])
@@ -1459,37 +1423,42 @@ Static Function ZMRunDocs(aState, aSelecionados, aEtapas, oDlg, aResultado, cSer
 		ZMStage(aEtapas, 6, "[EM ANDAMENTO] Liberando integralmente o pedido pela MaLibDoFat.", oDlg)
 		cErro := ZMRelOrder(cPedidoNovo)
 		If !Empty(cErro)
-			Break("Entrada " + AllTrim(cDocRet) + " e pedido " + AllTrim(cPedidoNovo) + " criados; liberacao nao confirmada: " + cErro)
+			Break("Entradas " + ZMEntryRefs(aDocsRet) + " e pedido " + AllTrim(cPedidoNovo) + " criados; liberacao nao confirmada: " + cErro)
 		EndIf
 		ZMStage(aEtapas, 6, "[OK] Pedido liberado; SC9 conferida integralmente.", oDlg)
 		ZMStage(aEtapas, 7, "[EM ANDAMENTO] Faturando pedido pela MATA461.", oDlg)
 		aFaturamento := ZMInvoice(cPedidoNovo, cSerieSaida, dEntrega)
 		cDocSaida := aFaturamento[1]
 		If !Empty(aFaturamento[2])
-			Break("Pedido " + AllTrim(cPedidoNovo) + " liberado; MATA461: " + aFaturamento[2])
+			Break("Entradas " + ZMEntryRefs(aDocsRet) + " e pedido " + AllTrim(cPedidoNovo) + " liberados; MATA461: " + aFaturamento[2])
 		EndIf
 		ZMStage(aEtapas, 7, "[OK] MATA461 retornou o documento " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ".", oDlg)
 		ZMStage(aEtapas, 8, "[EM ANDAMENTO] Conferindo SF2/SD2.", oDlg)
 		If !ZMInvOK(cPedidoNovo, cDocSaida, cSerieSaida, cCliente, cLoja, aState, aSelecionados, aEtapas, oDlg)
-			Break("MATA461 retornou " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ", mas SF2/SD2 nao confirmaram todos os itens. Nao repita antes de reconciliar.")
+			Break("Entradas " + ZMEntryRefs(aDocsRet) + " e pedido " + AllTrim(cPedidoNovo) + " faturados, mas SF2/SD2 nao confirmaram a saida " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ". Nao repita antes de reconciliar.")
 		EndIf
 		ConOut("[ZMOST][PROCESSO] ZMInvOK retornou sucesso; pedido=" + AllTrim(cPedidoNovo) + "; documento=" + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida))
 		aResultado[6] := cDocSaida
 		ZMStage(aEtapas, 8, "[OK] SF2/SD2 confirmadas para " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ".", oDlg)
 		aResultado[1] := .T.
-		aResultado[2] := "Concluido. Entrada " + AllTrim(cDocRet) + "/" + AllTrim(cSerie) + "; pedido " + AllTrim(cPedidoNovo) + "; saida " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ". Autorizacao/transmissao pelo AUTONFE padrao."
+		aResultado[2] := "Concluido. Entradas " + ZMEntryRefs(aDocsRet) + "; pedido unico " + AllTrim(cPedidoNovo) + "; saida unica " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + ". Autorizacao/transmissao pelo AUTONFE padrao."
 		ZMStage(aEtapas, 9, aResultado[2], oDlg)
 	Recover Using oError
 		cErro := ZMError(oError)
+		lRetornoCriado := lRetornoCriado .Or. Len(aDocsRet) > 0
+		aResultado[3] := ZMEntryRefs(aDocsRet)
+		aResultado[5] := aResultado[5] .Or. lRetornoCriado
 		If Empty(cErro)
 			cErro := "Falha sem descricao durante o processamento."
 		EndIf
 		aResultado[1] := .F.
 		If lRetornoCriado
 			If !Empty(cDocSaida)
-				aResultado[2] := "Entrada " + AllTrim(cDocRet) + " e pedido " + AllTrim(cPedidoNovo) + " criados; confira saida " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + " antes de repetir. " + cErro
+				aResultado[2] := "Entradas " + ZMEntryRefs(aDocsRet) + " e pedido " + AllTrim(cPedidoNovo) + " criados; confira saida " + AllTrim(cDocSaida) + "/" + AllTrim(cSerieSaida) + " antes de repetir. " + cErro
+			ElseIf lPedidoOK
+				aResultado[2] := "Entradas " + ZMEntryRefs(aDocsRet) + " e pedido " + AllTrim(cPedidoNovo) + " criados; confira liberacao/faturamento antes de repetir. " + cErro
 			Else
-				aResultado[2] := "Entrada " + AllTrim(cDocRet) + " e pedido " + AllTrim(cPedidoNovo) + " criados; confira liberacao/faturamento antes de repetir. " + cErro
+				aResultado[2] := "Entradas " + ZMEntryRefs(aDocsRet) + " confirmadas; consolidacao interrompida. Reconcilie SF1/SD1 e SC5/SC6 antes de repetir. " + cErro
 			EndIf
 		ElseIf !Empty(cDocRet)
 			aResultado[2] := "MATA103 tentou o documento " + AllTrim(cDocRet) + "; confira SF1/SD1 antes de repetir. " + cErro
@@ -1595,6 +1564,121 @@ Static Function ZMOrigins(aState, aSelecionados)
 	Next nItem
 
 Return aOrigens
+
+Static Function ZMEntrySel(aState, aSelecionados, cDoc, cSerie)
+
+	Local aEntrySel := {}
+	Local aLinha := {}
+	Local nItem := 0
+
+	For nItem := 1 To Len(aSelecionados)
+		aLinha := aState[1, aSelecionados[nItem]]
+		If aLinha[ZM_DOC] == cDoc .And. aLinha[ZM_SERIE] == cSerie
+			aAdd(aEntrySel, aSelecionados[nItem])
+		EndIf
+	Next nItem
+
+Return aEntrySel
+
+Static Function ZMSeriesOK(cSerie, cSerieGrupo, lConsolidado)
+Return lConsolidado .Or. cSerie == cSerieGrupo
+
+Static Function ZMEntryRefs(aDocsRet)
+
+	Local cRefs := ""
+	Local nItem := 0
+
+	For nItem := 1 To Len(aDocsRet)
+		If nItem > 1
+			cRefs += ", "
+		EndIf
+		cRefs += AllTrim(aDocsRet[nItem, 1]) + "/" + AllTrim(aDocsRet[nItem, 2])
+	Next nItem
+
+Return cRefs
+
+Static Function ZMEntryDocs(aState, aSelecionados, aOrigens, cFornecedor, cLojaFor, aEtapas, oDlg, aDocsRet, lReservaPendente, lAutoInvocado, cDocRet, cSerieDoc)
+
+	Local aCab := {}
+	Local aItens := {}
+	Local aItem := {}
+	Local aEntradaSel := {}
+	Local aNumero := {}
+	Local aLog := {}
+	Local aOrigem := {}
+	Local aLinha := {}
+	Local nOrigem := 0
+	Local nItem := 0
+
+	For nOrigem := 1 To Len(aOrigens)
+		aOrigem := aOrigens[nOrigem]
+		aEntradaSel := ZMEntrySel(aState, aSelecionados, aOrigem[1], aOrigem[2])
+		If Len(aEntradaSel) == 0 .Or. Len(aEntradaSel) != aOrigem[5]
+			Return "Selecao inconsistente para entrada da nota " + AllTrim(aOrigem[1]) + "/" + AllTrim(aOrigem[2]) + "."
+		EndIf
+		aCab := {}
+		aItens := {}
+		ZMStage(aEtapas, 2, "[EM ANDAMENTO] MATA103 da nota " + AllTrim(aOrigem[1]) + "/" + AllTrim(aOrigem[2]) + " (" + cValToChar(nOrigem) + "/" + cValToChar(Len(aOrigens)) + ").", oDlg)
+		aNumero := ZMReserve("SF1", "F1_DOC")
+		If !Empty(aNumero[2])
+			Return "MATA103 da nota " + AllTrim(aOrigem[1]) + "/" + AllTrim(aOrigem[2]) + ": " + aNumero[2]
+		EndIf
+		lReservaPendente := .T.
+		lAutoInvocado := .F.
+		cDocRet := aNumero[1]
+		cSerieDoc := PadR(AllTrim(aOrigem[2]), TamSX3("F1_SERIE")[1])
+		aAdd(aCab, {"F1_DOC", cDocRet, Nil})
+		aAdd(aCab, {"F1_SERIE", cSerieDoc, Nil})
+		aAdd(aCab, {"F1_TIPO", "B", Nil})
+		aAdd(aCab, {"F1_FORMUL", "S", Nil})
+		aAdd(aCab, {"F1_FORNECE", PadR(AllTrim(cFornecedor), TamSX3("F1_FORNECE")[1]), Nil})
+		aAdd(aCab, {"F1_LOJA", PadR(AllTrim(cLojaFor), TamSX3("F1_LOJA")[1]), Nil})
+		aAdd(aCab, {"F1_EMISSAO", Date(), Nil})
+		aAdd(aCab, {"F1_DTDIGIT", Date(), Nil})
+		aAdd(aCab, {"F1_ESPECIE", "SPED", Nil})
+		aAdd(aCab, {"F1_COND", "030", Nil})
+		aAdd(aCab, {"F1_MOEDA", 1, Nil})
+		aAdd(aCab, {"F1_TXMOEDA", 1, Nil})
+		For nItem := 1 To Len(aEntradaSel)
+			aLinha := aState[1, aEntradaSel[nItem]]
+			aItem := {}
+			aAdd(aItem, {"D1_ITEM", StrZero(nItem, TamSX3("D1_ITEM")[1]), Nil})
+			aAdd(aItem, {"D1_DOC", cDocRet, Nil})
+			aAdd(aItem, {"D1_SERIE", cSerieDoc, Nil})
+			aAdd(aItem, {"D1_COD", aLinha[ZM_PROD], Nil})
+			aAdd(aItem, {"D1_UM", aLinha[ZM_UM], Nil})
+			aAdd(aItem, {"D1_LOCAL", aLinha[ZM_LOCAL], Nil})
+			aAdd(aItem, {"D1_QUANT", aLinha[ZM_QTSEL], Nil})
+			aAdd(aItem, {"D1_VUNIT", aLinha[ZM_PRECO], Nil})
+			aAdd(aItem, {"D1_TOTAL", aLinha[ZM_QTSEL] * aLinha[ZM_PRECO], Nil})
+			aAdd(aItem, {"D1_TES", aLinha[ZM_RETOR], Nil})
+			aAdd(aItem, {"D1_NFORI", aLinha[ZM_DOC], Nil})
+			aAdd(aItem, {"D1_SERIORI", aLinha[ZM_SERIE], Nil})
+			aAdd(aItem, {"D1_ITEMORI", aLinha[ZM_ITEM], Nil})
+			aAdd(aItem, {"D1_IDENTB6", aLinha[ZM_IDENT], Nil})
+			aAdd(aItens, aItem)
+		Next nItem
+		lMsErroAuto := .F.
+		ConOut("[ZMOST][PROCESSO] MATA103 antes; origem=" + AllTrim(aOrigem[1]) + "/" + AllTrim(aOrigem[2]) + "; documento=" + AllTrim(cDocRet) + "; itens=" + cValToChar(Len(aItens)))
+		lAutoInvocado := .T.
+		MsExecAuto({|aHeader, aLines, nOption, lShow| MATA103(aHeader, aLines, nOption, lShow)}, aCab, aItens, 3, .F.)
+		ConfirmSX8()
+		lReservaPendente := .F.
+		lAutoInvocado := .F.
+		If lMsErroAuto
+			aLog := GetAutoGrLog()
+			Return "MATA103 da nota " + AllTrim(aOrigem[1]) + "/" + AllTrim(aOrigem[2]) + ": " + ZMLogAuto(aLog)
+		EndIf
+		ConOut("[ZMOST][PROCESSO] MATA103 retornou; origem=" + AllTrim(aOrigem[1]) + "/" + AllTrim(aOrigem[2]) + "; documento=" + AllTrim(cDocRet))
+		ZMStage(aEtapas, 3, "[EM ANDAMENTO] Conferindo entrada " + AllTrim(cDocRet) + "/" + AllTrim(cSerieDoc) + ".", oDlg)
+		If !ZMEntryOK(cDocRet, cSerieDoc, cFornecedor, cLojaFor, aState, aEntradaSel)
+			Return "MATA103 retornou, mas SF1/SD1 nao confirmaram a nota " + AllTrim(aOrigem[1]) + "/" + AllTrim(aOrigem[2]) + " no documento " + AllTrim(cDocRet) + ". Nao repita antes de reconciliar."
+		EndIf
+		aAdd(aDocsRet, {cDocRet, cSerieDoc})
+		ZMStage(aEtapas, 2, "[OK] Entrada " + AllTrim(cDocRet) + "/" + AllTrim(cSerieDoc) + " confirmada.", oDlg)
+	Next nOrigem
+
+Return ""
 
 Static Function ZMStage(aEtapas, nEtapa, cTexto, oDlg)
 
@@ -2688,6 +2772,8 @@ Static Function ZMOSTST()
 	Local aTestGroupResult := {}
 	Local aTestInvoices := {}
 	Local aTestMap := {}
+	Local aEntradaSel := {}
+	Local aEntradaOutra := {}
 	Local dReferencia := StoD("20261104")
 	Local dHoje := Date()
 	Local cResumo := ""
@@ -2764,8 +2850,10 @@ Static Function ZMOSTST()
 	aTestGroupResult := ZMOrigObs(aTestGroupState, {1, 2})
 	aAdd(aCasos, {"Observacao consolidada preserva notas de origem", aTestGroupResult[1] == "RENOVACAO MOSTRUARIO - NFs ORIGEM 000001/1, 000002/1" .And. Empty(aTestGroupResult[2])})
 	aTestGroupState[1, 2, ZM_SERIE] := "2"
-	aTestGroupResult := ZMGrpSel(aTestGroupState, .T.)
-	aAdd(aCasos, {"Consolidacao de series diferentes bloqueada", !aTestGroupResult[1]})
+	aEntradaSel := ZMEntrySel(aTestGroupState, {1, 2}, "000001", "1")
+	aEntradaOutra := ZMEntrySel(aTestGroupState, {1, 2}, "000002", "2")
+	aAdd(aCasos, {"Series diferentes consolidam com entradas separadas", ZMSeriesOK("2", "1", .T.) .And. !ZMSeriesOK("2", "1", .F.) .And. Len(aEntradaSel) == 1 .And. aEntradaSel[1] == 1 .And. Len(aEntradaOutra) == 1 .And. aEntradaOutra[1] == 2})
+	aAdd(aCasos, {"Resumo preserva cada entrada", ZMEntryRefs({{"000100", "1"}, {"000101", "2"}}) == "000100/1, 000101/2"})
 	aTestGroupState[1, 2, ZM_SERIE] := "1"
 	aTestGroupState[1, 2, ZM_DOC] := "000001"
 	aTestGroupState[1, 2, ZM_ORIGPED] := "011223"
