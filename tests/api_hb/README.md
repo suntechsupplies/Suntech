@@ -59,11 +59,13 @@ py -3 -m unittest tests.api_hb.test_contracts.ApiHbContractTests.test_customers_
 - `PRODUCTS.prw`: validacao de ID obrigatorio e consulta paginada.
 - `TAXINVOICES.prw`: consulta da rota declarada.
 - `ROMANEIOS.prw`: consulta da rota declarada.
-- `Incidents.prw`: validação do contrato do evento financeiro de entrega, sem criação de instruções.
+- `Incidents.prw`: validacao do contrato dos eventos financeiros de entrega. Os testes atuais nao comprovam gravacao de instrucoes na FI2 nem processamento pelo banco.
 - `GENTOKEN.prw`: OAuth opcional, quando as credenciais forem informadas.
 - `M410STTS.prw`: enfileiramento de pedido Marketplace elegível na tabela `ZTR` (teste opt-in).
 
 O teste de contrato de `Incidents.prw` é ignorado por padrão porque a rota só existe após compilação e publicação no RPO de homologação. Para executá-lo depois da publicação:
+
+Descricao do contrato, dos tipos de evento e dos limites dos testes: [Eventos de alteracao de cobranca](../../docs/eventos_alteracao_cobranca.md).
 
 ```powershell
 $env:HB_ENABLE_DELIVERY_FINANCIAL_EVENT_TESTS = "true"

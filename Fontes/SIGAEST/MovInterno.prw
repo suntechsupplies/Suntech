@@ -226,6 +226,7 @@ Static Function ProcImp(cFileImp, cFileLog, cNameRot, nTipoData, lNoAcento, lOrd
 	Local cErrAuto    	:= ''
 	Local cQuery        := ''
 	Local cAliasSD3     := GetNextAlias()
+	Local cAliasSB2     := GetNextAlias()
 	Local aTamSX3     	:= {}
 	Local xConteudo   	:= Nil 
 	Local nCntFor       := 0
@@ -237,6 +238,7 @@ Static Function ProcImp(cFileImp, cFileLog, cNameRot, nTipoData, lNoAcento, lOrd
 	Local lMovValor     := .T.
 	Local nQtdDesejada := 0
 	Local nAjusteQtd   := 0
+	Local nSaldoPos    := 0
 	Local nLinhasSemSB9 := 0
 	Local nFalhasProc := 0
 	Local cErroSB9 := ""
@@ -451,7 +453,9 @@ Static Function ProcImp(cFileImp, cFileLog, cNameRot, nTipoData, lNoAcento, lOrd
 									cQuery += "WHERE D1_COD    = '" + PadR(aMsExcAuto[nPosCod][2],15) + "' "
 									cQuery += "AND D1_FILIAL   = '" + xFilial("SD1")            + "' "
 									cQuery += "AND D1_LOCAL    = '" + aMsExcAuto[nPosLocal][2]  + "' "
-									cQuery += "AND D1_TES IN (SELECT F4_CODIGO FROM SF4010 WHERE F4_ESTOQUE = 'S' AND D_E_L_E_T_ <> '*') "
+									cQuery += "AND D1_TES IN (SELECT SF4.F4_CODIGO FROM " + RetSQLName("SF4") + " SF4 "
+									cQuery += "WHERE SF4.F4_FILIAL = '" + xFilial("SF4") + "' AND SF4.F4_CODIGO = SD1010.D1_TES "
+									cQuery += "AND SF4.F4_ESTOQUE = 'S' AND SF4.D_E_L_E_T_ <> '*') "
 									cQuery += "AND ((D1_EMISSAO > '"  + DTOS(dUltFech)          + "' AND D1_DTDIGIT = '') OR  D1_DTDIGIT >  '" + DTOS(dUltFech)  + "')"
 									cQuery += "AND ((D1_EMISSAO <= '" + DTOS(dDataBase)         + "' AND D1_DTDIGIT = '') OR (D1_DTDIGIT <= '" + DTOS(dDataBase) + "' AND D1_DTDIGIT <> ''))"
 									cQuery += "AND D_E_L_E_T_ <> '*' "
@@ -461,7 +465,9 @@ Static Function ProcImp(cFileImp, cFileLog, cNameRot, nTipoData, lNoAcento, lOrd
 									cQuery += "WHERE D2_COD    = '" + PadR(aMsExcAuto[nPosCod][2],15) + "' "
 									cQuery += "AND D2_FILIAL   = '" + xFilial("SD2")            + "' "
 									cQuery += "AND D2_LOCAL    = '" + aMsExcAuto[nPosLocal][2]  + "' "
-									cQuery += "AND D2_TES IN (SELECT F4_CODIGO FROM SF4010 WHERE F4_ESTOQUE = 'S' AND D_E_L_E_T_ <> '*') "
+									cQuery += "AND D2_TES IN (SELECT SF4.F4_CODIGO FROM " + RetSQLName("SF4") + " SF4 "
+									cQuery += "WHERE SF4.F4_FILIAL = '" + xFilial("SF4") + "' AND SF4.F4_CODIGO = SD2010.D2_TES "
+									cQuery += "AND SF4.F4_ESTOQUE = 'S' AND SF4.D_E_L_E_T_ <> '*') "
 									cQuery += "AND ((D2_EMISSAO > '"  + DTOS(dUltFech)          + "' AND D2_DTDIGIT = '') OR  D2_DTDIGIT >  '" + DTOS(dUltFech)  + "')"
 									cQuery += "AND ((D2_EMISSAO <= '" + DTOS(dDataBase)         + "' AND D2_DTDIGIT = '') OR (D2_DTDIGIT <= '" + DTOS(dDataBase) + "' AND D2_DTDIGIT <> ''))"
 									cQuery += "AND D_E_L_E_T_ <> '*'                                 "
@@ -600,7 +606,25 @@ Static Function ProcImp(cFileImp, cFileLog, cNameRot, nTipoData, lNoAcento, lOrd
 												cErrAuto := CsvLogAuto()
 												UpdFileLog(nHdlLog, '[' + DtoC(Date()) + ' - ' + Time() + '] [LINHA: ' + StrZero(nLinha, 5) + '] Erro ao ajustar quantidade para produto ' + AllTrim(aMsExcAuto[nPosCod][2]) + ' | Local: ' + AllTrim(aMsExcAuto[nPosLocal][2]) + ' | TM: ' + cCodMov + '. Detalhe: ' + cErrAuto + Chr(13) + Chr(10))
 											Else
-											UpdFileLog(nHdlLog, '[' + DtoC(Date()) + ' - ' + Time() + '] [LINHA: ' + StrZero(nLinha, 5) + '] Quantidade ajustada para ' + cValToChar(nQtdDesejada) + ' usando TM ' + cCodMov + ' em produto ' + AllTrim(aMsExcAuto[nPosCod][2]) + ' | Local: ' + AllTrim(aMsExcAuto[nPosLocal][2]) + Chr(13) + Chr(10))
+											cQuery := "SELECT B2_QATU FROM " + RetSQLName("SB2") + " SB2 "
+											cQuery += "WHERE B2_FILIAL = '" + xFilial("SB2") + "' AND B2_COD = '" + PadR(aMsExcAuto[nPosCod][2], 15) + "' "
+											cQuery += "AND B2_LOCAL = '" + AllTrim(aMsExcAuto[nPosLocal][2]) + "' AND D_E_L_E_T_ = ' '"
+											cQuery := ChangeQuery(cQuery)
+											dbUseArea(.T., "TOPCONN", TcGenQry(,, cQuery), cAliasSB2, .T., .T.)
+											dbSelectArea(cAliasSB2)
+											If (cAliasSB2)->(EoF())
+												lErroProc := .T.
+												UpdFileLog(nHdlLog, '[' + DtoC(Date()) + ' - ' + Time() + '] [LINHA: ' + StrZero(nLinha, 5) + '] Movimento gravado, mas saldo SB2 não localizado para validação do produto ' + AllTrim(aMsExcAuto[nPosCod][2]) + ' | Local: ' + AllTrim(aMsExcAuto[nPosLocal][2]) + Chr(13) + Chr(10))
+											Else
+												nSaldoPos := (cAliasSB2)->B2_QATU
+												If Round(nSaldoPos, 4) <> Round(nQtdDesejada, 4)
+													lErroProc := .T.
+													UpdFileLog(nHdlLog, '[' + DtoC(Date()) + ' - ' + Time() + '] [LINHA: ' + StrZero(nLinha, 5) + '] Movimento gravado, mas saldo SB2 final ' + cValToChar(nSaldoPos) + ' difere da meta CSV ' + cValToChar(nQtdDesejada) + ' para produto ' + AllTrim(aMsExcAuto[nPosCod][2]) + ' | Local: ' + AllTrim(aMsExcAuto[nPosLocal][2]) + Chr(13) + Chr(10))
+												Else
+													UpdFileLog(nHdlLog, '[' + DtoC(Date()) + ' - ' + Time() + '] [LINHA: ' + StrZero(nLinha, 5) + '] Saldo SB2 validado: ' + cValToChar(nSaldoPos) + ' | Meta CSV: ' + cValToChar(nQtdDesejada) + ' | Quantidade movimentada: ' + cValToChar(Abs(nAjusteQtd)) + ' usando TM ' + cCodMov + ' em produto ' + AllTrim(aMsExcAuto[nPosCod][2]) + ' | Local: ' + AllTrim(aMsExcAuto[nPosLocal][2]) + Chr(13) + Chr(10))
+												EndIf
+											EndIf
+											(cAliasSB2)->(dbCloseArea())
 											EndIf
 										Else
 											lErroProc := .T.
@@ -702,7 +726,7 @@ Static Function CriaSB9SaldoZero(cCodigo, cLocal, dUltFech, dDataBase, cErro)
 	cQuery += "WHERE D1_FILIAL = '" + xFilial("SD1") + "' "
 	cQuery += "AND D1_COD = '" + cCodSql + "' "
 	cQuery += "AND D1_LOCAL = '" + cLocalSql + "' "
-	cQuery += "AND D1_TES IN (SELECT F4_CODIGO FROM " + RetSQLName("SF4") + " SF4 WHERE F4_ESTOQUE = 'S' AND D_E_L_E_T_ <> '*') "
+	cQuery += "AND D1_TES IN (SELECT SF4.F4_CODIGO FROM " + RetSQLName("SF4") + " SF4 WHERE SF4.F4_FILIAL = '" + xFilial("SF4") + "' AND SF4.F4_CODIGO = SD1.D1_TES AND SF4.F4_ESTOQUE = 'S' AND SF4.D_E_L_E_T_ <> '*') "
 	cQuery += "AND ((D1_EMISSAO > '" + DtoS(dUltFech) + "' AND D1_DTDIGIT = '') OR D1_DTDIGIT > '" + DtoS(dUltFech) + "') "
 	cQuery += "AND ((D1_EMISSAO <= '" + DtoS(dDataBase) + "' AND D1_DTDIGIT = '') OR (D1_DTDIGIT <= '" + DtoS(dDataBase) + "' AND D1_DTDIGIT <> '')) AND D_E_L_E_T_ <> '*' "
 	cQuery += "UNION ALL "
@@ -711,7 +735,7 @@ Static Function CriaSB9SaldoZero(cCodigo, cLocal, dUltFech, dDataBase, cErro)
 	cQuery += "WHERE D2_FILIAL = '" + xFilial("SD2") + "' "
 	cQuery += "AND D2_COD = '" + cCodSql + "' "
 	cQuery += "AND D2_LOCAL = '" + cLocalSql + "' "
-	cQuery += "AND D2_TES IN (SELECT F4_CODIGO FROM " + RetSQLName("SF4") + " SF4 WHERE F4_ESTOQUE = 'S' AND D_E_L_E_T_ <> '*') "
+	cQuery += "AND D2_TES IN (SELECT SF4.F4_CODIGO FROM " + RetSQLName("SF4") + " SF4 WHERE SF4.F4_FILIAL = '" + xFilial("SF4") + "' AND SF4.F4_CODIGO = SD2.D2_TES AND SF4.F4_ESTOQUE = 'S' AND SF4.D_E_L_E_T_ <> '*') "
 	cQuery += "AND ((D2_EMISSAO > '" + DtoS(dUltFech) + "' AND D2_DTDIGIT = '') OR D2_DTDIGIT > '" + DtoS(dUltFech) + "') "
 	cQuery += "AND ((D2_EMISSAO <= '" + DtoS(dDataBase) + "' AND D2_DTDIGIT = '') OR (D2_DTDIGIT <= '" + DtoS(dDataBase) + "' AND D2_DTDIGIT <> '')) AND D_E_L_E_T_ <> '*'"
 	cQuery := ChangeQuery(cQuery)

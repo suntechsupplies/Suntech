@@ -14,15 +14,17 @@
 
 ## 2. Evidencias e limites da analise
 
+Nota de rastreabilidade: `Fontes/Relatorios/matr480_CUSTOM.prx`, citado como fonte das referencias abaixo, nao esta presente neste workspace. Os caminhos e linhas originais nao podem ser abertos nem revalidados aqui; trate essas observacoes como evidencias do levantamento anterior e confirme-as contra a versao publicada do relatorio antes de reutiliza-las.
+
 | Evidencia | Fonte | Consequencia |
 | --- | --- | --- |
-| Base SB6, ligada a SB1 e SF4 | [MATR480 customizado](../Fontes/Relatorios/matr480_CUSTOM.prx#L235) | Usar registros de origem como candidatos, nao totais impressos |
-| Nossos materiais em terceiros: `B6_TIPO = 'E'` | [Filtro do relatorio](../Fontes/Relatorios/matr480_CUSTOM.prx#L252) | Selecionar somente a direcao pertinente ao processo |
-| SF4 exclui `F4_PODER3 = 'D'`; registros ativos e quantidade nao zero | [Consulta do relatorio](../Fontes/Relatorios/matr480_CUSTOM.prx#L242) | Reproduzir filtros pertinentes, observando o compartilhamento por tabela |
-| Consulta do MATR480 nao restringe `SB6.B6_PODER3`; usa tipo, participante, periodo, produto e TES/SF4 | [Consulta do relatorio](../Fontes/Relatorios/matr480_CUSTOM.prx#L245) | Nao adicionar `B6_PODER3 = 'R'` como filtro de origem; `D` e usado para localizar movimentos de retorno |
-| Saldo calculado por `ESTCalcTerc(produto, cliente, loja, identificador, TES, , data inicial, data final)` | [Calculo efetivo](../Fontes/Relatorios/matr480_CUSTOM.prx#L336) | Nao assumir que `B6_QUANT` e o saldo atual; validar tambem o periodo usado |
-| Retornos localizados por filial, identificador, produto e `B6_PODER3 = 'D'` | [Detalhamento dos retornos](../Fontes/Relatorios/matr480_CUSTOM.prx#L545) | Preservar vinculo com cada origem e considerar retornos parciais |
-| Conversao de unidade somente na apresentacao conforme parametro | [Exibicao de quantidades](../Fontes/Relatorios/matr480_CUSTOM.prx#L433) | Persistir unidade de processamento e controlar conversao explicitamente |
+| Base SB6, ligada a SB1 e SF4 | `MATR480_CUSTOM.prx` (nao localizado) | Usar registros de origem como candidatos, nao totais impressos |
+| Nossos materiais em terceiros: `B6_TIPO = 'E'` | `MATR480_CUSTOM.prx` (nao localizado) | Selecionar somente a direcao pertinente ao processo |
+| SF4 exclui `F4_PODER3 = 'D'`; registros ativos e quantidade nao zero | `MATR480_CUSTOM.prx` (nao localizado) | Reproduzir filtros pertinentes, observando o compartilhamento por tabela |
+| Consulta do MATR480 nao restringe `SB6.B6_PODER3`; usa tipo, participante, periodo, produto e TES/SF4 | `MATR480_CUSTOM.prx` (nao localizado) | Nao adicionar `B6_PODER3 = 'R'` como filtro de origem; `D` e usado para localizar movimentos de retorno |
+| Saldo calculado por `ESTCalcTerc(produto, cliente, loja, identificador, TES, , data inicial, data final)` | `MATR480_CUSTOM.prx` (nao localizado) | Nao assumir que `B6_QUANT` e o saldo atual; validar tambem o periodo usado |
+| Retornos localizados por filial, identificador, produto e `B6_PODER3 = 'D'` | `MATR480_CUSTOM.prx` (nao localizado) | Preservar vinculo com cada origem e considerar retornos parciais |
+| Conversao de unidade somente na apresentacao conforme parametro | `MATR480_CUSTOM.prx` (nao localizado) | Persistir unidade de processamento e controlar conversao explicitamente |
 | Criacao local de pedidos usa `MsExecAuto`/`MATA410`, captura erros e confere itens gravados | [Padrao existente](../Fontes/SIGAFAT/ZTRVALID.prw#L1639) | Reaproveitar a abordagem, nao as regras especificas do processo ZTR |
 | ExecAuto da MATA103 | [PCOM12003 - Documento de Entrada](https://tdn.totvs.com.br/pages/releaseview.action?pageId=235592777) e [exemplo de documento tipo devolucao](https://centraldeatendimento.totvs.com/hc/pt-br/articles/23214935762455-Cross-Segmentos-Totvs-Backoffice-Protheus-SIGACOM-Rotina-Autom%C3%A1tica-MATA103-Documento-Tipo-Devolu%C3%A7%C3%A3o) | Confirma `MsExecAuto` com opcao 3 para inclusao e lista fluxos distintos de Devolucao - Terceiros e Beneficiamento - Terceiros. O exemplo generico de tipo D usa fornecedor e formulario N; nao o copiar para o retorno proprio do projeto, cujos exemplos observados sao tipo B, formulario S, especie SPED, serie 3 e TES 3A1. Selecionar e homologar a secao/parametros exatos para o caso cliente/SA1, vinculos de origem e identificador SB6 antes de gravar. O quarto parametro `lWhenGet` abre a tela para edicao quando `.T.`; para processamento automatico deve ser omitido ou `.F.`. |
 | Customizacao de MATA103 trata natureza de NCC | [MT103NTZ](../Fontes/SIGACOM/MT103NTZ.prw#L18) | Homologar efeitos financeiros; nao presumir retorno sem titulo |
